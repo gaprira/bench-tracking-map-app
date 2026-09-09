@@ -1,0 +1,16 @@
+@import "tailwindcss";
+
+html,
+body {
+  height: 100%;
+}
+
+.leaflet-container {
+  font-family: inherit;
+}
+
+.leaflet-tooltip {
+  border-radius: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
