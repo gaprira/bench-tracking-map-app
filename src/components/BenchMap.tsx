@@ -77,6 +77,20 @@ function FocusHandler({ focus }: { focus: Props["focus"] }) {
   return null;
 }
 
+// Контейнер карты может скрываться (вкладки «Карта/Список» на мобильных) —
+// Leaflet тогда не знает реальный размер и рисует серую пустоту.
+// ResizeObserver + invalidateSize пересчитывают размер при показе контейнера.
+function AutoResize() {
+  const map = useMap();
+  useEffect(() => {
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => map.invalidateSize());
+    observer.observe(map.getContainer());
+    return () => observer.disconnect();
+  }, [map]);
+  return null;
+}
+
 export default function BenchMap({
   benches,
   selectedId,
@@ -98,6 +112,7 @@ export default function BenchMap({
       />
       <ClickHandler onMapClick={onMapClick} />
       <FocusHandler focus={focus} />
+      <AutoResize />
 
       {benches
         .filter((b) => Number.isFinite(b.lat) && Number.isFinite(b.lng))

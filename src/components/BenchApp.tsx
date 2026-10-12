@@ -375,7 +375,7 @@ export default function BenchApp() {
         <main
           className={`${
             mobileTab === "map" ? "block" : "hidden"
-          } bg-dots-slate relative min-h-0 flex-1 bg-gradient-to-br from-slate-100 via-slate-50 to-emerald-50 p-3 md:p-4`}
+          } md:block bg-dots-slate relative min-h-0 flex-1 bg-gradient-to-br from-slate-100 via-slate-50 to-emerald-50 p-3 md:p-4`}
         >
           <div className="relative h-full overflow-hidden md:rounded-2xl md:shadow-2xl md:shadow-emerald-900/15 md:ring-1 md:ring-slate-900/10">
             <BenchMap
