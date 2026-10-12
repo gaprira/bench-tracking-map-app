@@ -1,0 +1,24 @@
+# Явный список исключений для деплоя через Vercel CLI
+# (при наличии .vercelignore он используется вместо .gitignore)
+
+# VCS и сборка
+.git
+.next
+.vercel
+
+# зависимости — Vercel ставит их сам (npm ci по package-lock.json)
+node_modules
+
+# локальная инфраструктура (портативный PostgreSQL, cloudflared)
+pgsql
+tools
+
+# секреты
+.env
+.env.local
+.env.vercel
+
+# локальные фото (живут в БД) и прочее
+public/uploads
+tsconfig.tsbuildinfo
+*.log
