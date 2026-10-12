@@ -40,5 +40,15 @@ export const reviewsRelations = relations(reviews, ({ one }) => ({
   bench: one(benches, { fields: [reviews.benchId], references: [benches.id] }),
 }));
 
+// Фото хранятся в базе (base64): на Vercel файловая система
+// доступна только для чтения, public/uploads там не работает.
+export const photos = pgTable("photos", {
+  filename: varchar("filename", { length: 100 }).primaryKey(),
+  mime: varchar("mime", { length: 40 }).notNull(),
+  data: text("data").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export type Bench = typeof benches.$inferSelect;
 export type Review = typeof reviews.$inferSelect;
+export type Photo = typeof photos.$inferSelect;

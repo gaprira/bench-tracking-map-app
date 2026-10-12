@@ -126,7 +126,9 @@ export default function BenchMap({
         </Marker>
       ))}
 
-      {draft && <Marker position={[draft.lat, draft.lng]} icon={draftIcon} />}
+      {draft && Number.isFinite(draft.lat) && Number.isFinite(draft.lng) && (
+        <Marker position={[draft.lat, draft.lng]} icon={draftIcon} />
+      )}
     </MapContainer>
   );
 }

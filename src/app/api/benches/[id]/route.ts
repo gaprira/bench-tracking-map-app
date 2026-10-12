@@ -1,6 +1,7 @@
 import { db } from "@/db";
 import { benches, reviews } from "@/db/schema";
 import { desc, eq } from "drizzle-orm";
+import { checkAdmin, adminDenied } from "@/lib/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -42,7 +43,58 @@ export async function GET(_request: Request, { params }: Ctx) {
   });
 }
 
-export async function DELETE(_request: Request, { params }: Ctx) {
+// Редактирование скамейки (название, описание) — только администратор.
+export async function PATCH(request: Request, { params }: Ctx) {
+  if (!checkAdmin(request)) return adminDenied();
+
+  const { id } = await params;
+  const benchId = Number(id);
+  if (!Number.isInteger(benchId)) {
+    return Response.json({ error: "Некорректный id" }, { status: 400 });
+  }
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return Response.json({ error: "Некорректный JSON" }, { status: 400 });
+  }
+  const data = body as Record<string, unknown>;
+
+  const title = typeof data.title === "string" ? data.title.trim() : "";
+  const description =
+    typeof data.description === "string" ? data.description.trim() : "";
+
+  if (!title || title.length > 120) {
+    return Response.json(
+      { error: "Название обязательно (до 120 символов)" },
+      { status: 400 },
+    );
+  }
+  if (description.length > 2000) {
+    return Response.json(
+      { error: "Описание слишком длинное (до 2000 символов)" },
+      { status: 400 },
+    );
+  }
+
+  const updated = await db
+    .update(benches)
+    .set({ title, description: description || null })
+    .where(eq(benches.id, benchId))
+    .returning();
+
+  if (updated.length === 0) {
+    return Response.json({ error: "Скамейка не найдена" }, { status: 404 });
+  }
+
+  const [bench] = updated;
+  return Response.json({ ...bench, createdAt: bench.createdAt.toISOString() });
+}
+
+export async function DELETE(request: Request, { params }: Ctx) {
+  if (!checkAdmin(request)) return adminDenied();
+
   const { id } = await params;
   const benchId = Number(id);
   if (!Number.isInteger(benchId)) {

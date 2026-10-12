@@ -9,6 +9,54 @@ type PhotoCaptureProps = {
   preview?: string | null;
 };
 
+const MAX_DIMENSION = 1600;
+const JPEG_QUALITY = 0.85;
+
+// Сжимаем фото на клиенте: у Vercel лимит ~4.5 МБ на запрос (а фото два),
+// плюс сжатые фото быстрее грузятся и меньше занимают места в базе.
+// Если браузер не смог декодировать файл (например, HEIC в Chrome) — отдаём как есть.
+const compressImage = (file: File): Promise<File> =>
+  new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      try {
+        const scale = Math.min(1, MAX_DIMENSION / Math.max(img.width, img.height));
+        const width = Math.max(1, Math.round(img.width * scale));
+        const height = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          resolve(file);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              resolve(file);
+              return;
+            }
+            const baseName = file.name.replace(/\.[^.]+$/, "") || "photo";
+            resolve(new File([blob], `${baseName}.jpg`, { type: "image/jpeg" }));
+          },
+          "image/jpeg",
+          JPEG_QUALITY,
+        );
+      } catch {
+        resolve(file);
+      }
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(file);
+    };
+    img.src = url;
+  });
+
 export default function PhotoCapture({ label, onPhoto, required = true, preview = null }: PhotoCaptureProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -73,12 +121,12 @@ export default function PhotoCapture({ label, onPhoto, required = true, preview 
     }, "image/jpeg", 0.9);
   }, [onPhoto]);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0] || null;
-    if (file) {
-      setCapturedFile(file);
-      onPhoto(file);
-    }
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const original = e.target.files?.[0] || null;
+    if (!original) return;
+    const file = await compressImage(original);
+    setCapturedFile(file);
+    onPhoto(file);
   };
 
   const clearPhoto = () => {
@@ -160,7 +208,7 @@ export default function PhotoCapture({ label, onPhoto, required = true, preview 
           >
             Нажмите или перетащите фото сюда
           </label>
-          <p className="text-xs text-slate-400 mt-1">JPEG, PNG, WebP, HEIC до 10 МБ</p>
+          <p className="text-xs text-slate-400 mt-1">JPEG, PNG, WebP, HEIC — фото сожмётся автоматически</p>
         </div>
       )}
 

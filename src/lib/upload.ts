@@ -1,30 +1,26 @@
-import { writeFile, mkdir } from "fs/promises";
-import { join } from "path";
-import { existsSync } from "fs";
+import { db } from "@/db";
+import { photos } from "@/db/schema";
 
-const UPLOAD_DIR = join(process.cwd(), "public", "uploads");
-
-export async function ensureUploadDir() {
-  if (!existsSync(UPLOAD_DIR)) {
-    await mkdir(UPLOAD_DIR, { recursive: true });
-  }
-}
-
+// Фото хранятся в таблице photos в базе данных (base64).
+// На Vercel файловая система только для чтения,
+// поэтому сохранять файлы в public/uploads нельзя.
 export async function saveUploadedFile(
   file: File,
   prefix: string
 ): Promise<string> {
-  await ensureUploadDir();
-
   const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
   const timestamp = Date.now();
   const random = Math.random().toString(36).slice(2, 8);
   const filename = `${prefix}_${timestamp}_${random}.${ext}`;
-  const filepath = join(UPLOAD_DIR, filename);
 
-  const bytes = await file.arrayBuffer();
-  const buffer = Buffer.from(bytes);
-  await writeFile(filepath, buffer);
+  const mime = file.type || "image/jpeg";
+  const bytes = Buffer.from(await file.arrayBuffer());
+
+  await db.insert(photos).values({
+    filename,
+    mime,
+    data: bytes.toString("base64"),
+  });
 
   return `/uploads/${filename}`;
 }
@@ -34,9 +30,11 @@ export function validateImageFile(file: File): string | null {
   if (!allowedTypes.includes(file.type)) {
     return "Неподдерживаемый формат. Используйте JPEG, PNG, WebP или HEIC.";
   }
-  const maxSize = 10 * 1024 * 1024;
+  // Лимит запроса на Vercel ~4.5 МБ (а фото в форме два).
+  // Клиент сжимает фото перед отправкой — эта проверка лишь страховка.
+  const maxSize = 4 * 1024 * 1024;
   if (file.size > maxSize) {
-    return "Файл слишком большой. Максимум 10 МБ.";
+    return "Файл слишком большой (до 4 МБ). Перезагрузите страницу и выберите фото поменьше.";
   }
   return null;
 }
