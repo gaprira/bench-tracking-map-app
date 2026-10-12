@@ -276,6 +276,8 @@ if (!databaseUrl) {
   pool = globalForDb.__arenaNextJsPostgresqlPool ?? new Pool({
     connectionString: databaseUrl,
     ssl: isLocal ? undefined : { rejectUnauthorized: false },
+    // pgbouncer (Neon pooler) не дружит с именованными prepared statements
+    prepareThreshold: 0,
     max: 5,
   });
   if (process.env.NODE_ENV !== "production") { globalForDb.__arenaNextJsPostgresqlPool = pool; }

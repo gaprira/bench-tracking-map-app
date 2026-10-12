@@ -28,3 +28,5 @@ public/uploads/
 
 # misc
 .DS_Store
+.vercel
+.env*
