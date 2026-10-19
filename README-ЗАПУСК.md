@@ -15,6 +15,12 @@ PostgreSQL в облаке — данные не пропадают.
 - Данные хранятся в облачной базе **Neon PostgreSQL**, фото — в той же базе
 - Запасной адрес: https://benchhunt-gaprira121213.vercel.app
 
+## 📱 Android-приложение
+
+В папке `android-app/` — приложение для Android (обёртка над сайтом).
+Готовый APK: `android-app/dist/benchhunt.apk`, пересборка — `android-app/build-apk.bat`.
+Подробности — в `android-app/README.md`.
+
 ## 🔑 Режим администратора (модерация)
 
 Обычные посетители могут смотреть, добавлять скамейки и писать рецензии.

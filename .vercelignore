@@ -22,3 +22,6 @@ tools
 public/uploads
 tsconfig.tsbuildinfo
 *.log
+
+# Android-приложение собирается локально, на сайт не нужно
+android-app

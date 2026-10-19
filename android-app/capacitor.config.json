@@ -1,0 +1,20 @@
+{
+  "appId": "app.vercel.benchhunt",
+  "appName": "Скамейки",
+  "webDir": "www",
+  "server": {
+    "url": "https://benchhunt.vercel.app",
+    "errorPath": "offline.html",
+    "androidScheme": "https"
+  },
+  "android": {
+    "backgroundColor": "#047857"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 1200,
+      "backgroundColor": "#047857",
+      "showSpinner": false
+    }
+  }
+}

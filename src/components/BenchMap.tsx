@@ -68,11 +68,29 @@ function ClickHandler({ onMapClick }: { onMapClick: Props["onMapClick"] }) {
 function FocusHandler({ focus }: { focus: Props["focus"] }) {
   const map = useMap();
   useEffect(() => {
-    if (focus) {
+    if (!focus) return;
+    const fly = () =>
       map.flyTo([focus.lat, focus.lng], focus.zoom ?? Math.max(map.getZoom(), 15), {
         duration: 0.8,
       });
+    const container = map.getContainer();
+    if (container.clientWidth > 0 && container.clientHeight > 0) {
+      fly();
+      return;
     }
+    // Карта скрыта (на мобильных клик по скамейке во вкладке «Список»):
+    // flyTo на контейнере 0×0 падает с «Invalid LatLng (NaN, NaN)».
+    // Ждём, пока контейнер получит размер, и только тогда перелетаем.
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      if (container.clientWidth > 0 && container.clientHeight > 0) {
+        observer.disconnect();
+        map.invalidateSize();
+        fly();
+      }
+    });
+    observer.observe(container);
+    return () => observer.disconnect();
   }, [focus, map]);
   return null;
 }

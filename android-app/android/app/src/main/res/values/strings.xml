@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Скамейки</string>
+    <string name="title_activity_main">Скамейки</string>
+    <string name="package_name">app.vercel.benchhunt</string>
+    <string name="custom_url_scheme">app.vercel.benchhunt</string>
+</resources>

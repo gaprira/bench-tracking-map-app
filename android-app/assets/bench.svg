@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <g fill="#ffffff">
+    <!-- спинка -->
+    <rect x="292" y="332" width="440" height="52" rx="26"/>
+    <rect x="292" y="414" width="440" height="52" rx="26"/>
+    <!-- стойки спинки -->
+    <rect x="340" y="332" width="40" height="230" rx="12"/>
+    <rect x="644" y="332" width="40" height="230" rx="12"/>
+    <!-- сиденье -->
+    <rect x="262" y="530" width="500" height="64" rx="28"/>
+    <!-- ножки -->
+    <rect x="318" y="580" width="48" height="140" rx="14"/>
+    <rect x="658" y="580" width="48" height="140" rx="14"/>
+  </g>
+</svg>
