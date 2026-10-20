@@ -10,6 +10,15 @@ export const metadata: Metadata = {
   title: "Скамейки — карта и рецензии",
   description:
     "Отмечайте скамейки на карте, оценивайте их и делитесь впечатлениями.",
+  applicationName: "Скамейки",
+  // iPhone: «На экран „Домой“» в Safari — полноэкранный режим без панелей браузера.
+  // statusBarStyle "default" — контент начинается под статус-баром, шапка не залезает под вырез
+  appleWebApp: {
+    capable: true,
+    title: "Скамейки",
+    statusBarStyle: "default",
+  },
+  formatDetection: { telephone: false },
 };
 
 export const viewport: Viewport = {
