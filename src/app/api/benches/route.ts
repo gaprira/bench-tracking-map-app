@@ -2,6 +2,7 @@ import { db } from "@/db";
 import { benches, reviews } from "@/db/schema";
 import { avg, count, desc, eq } from "drizzle-orm";
 import { saveUploadedFile, validateImageFile } from "@/lib/upload";
+import { normalizeTags } from "@/lib/tags";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,7 @@ export async function GET() {
       createdAt: benches.createdAt,
       benchPhoto: benches.benchPhoto,
       viewPhoto: benches.viewPhoto,
+      tags: benches.tags,
       reviewCount: count(reviews.id),
       avgRating: avg(reviews.rating),
     })
@@ -28,6 +30,7 @@ export async function GET() {
   return Response.json(
     rows.map((r: any) => ({
       ...r,
+      tags: r.tags ?? [],
       createdAt: r.createdAt.toISOString(),
       reviewCount: Number(r.reviewCount),
       avgRating: r.avgRating === null ? null : Number(r.avgRating),
@@ -46,6 +49,7 @@ export async function POST(request: Request) {
   let reviewText = "";
   let benchPhotoPath: string | null = null;
   let viewPhotoPath: string | null = null;
+  let tags: string[] = [];
 
   if (contentType.includes("multipart/form-data")) {
     const formData = await request.formData();
@@ -57,6 +61,7 @@ export async function POST(request: Request) {
     const ratingVal = formData.get("rating");
     if (ratingVal) rating = Number(ratingVal);
     reviewText = (formData.get("reviewText") as string)?.trim() || "";
+    tags = normalizeTags(formData.getAll("tags"));
 
     const benchPhotoFile = formData.get("benchPhoto") as File | null;
     const viewPhotoFile = formData.get("viewPhoto") as File | null;
@@ -98,6 +103,7 @@ export async function POST(request: Request) {
     const r = Number(data.rating);
     if (Number.isInteger(r) && r >= 1 && r <= 5) rating = r;
     reviewText = typeof data.reviewText === "string" ? data.reviewText.trim() : "";
+    tags = normalizeTags(data.tags);
   }
 
   if (!title || title.length > 120) {
@@ -112,7 +118,7 @@ export async function POST(request: Request) {
 
   const [created] = await db
     .insert(benches)
-    .values({ title, description: description || null, lat, lng, createdBy, benchPhoto: benchPhotoPath, viewPhoto: viewPhotoPath })
+    .values({ title, description: description || null, lat, lng, createdBy, benchPhoto: benchPhotoPath, viewPhoto: viewPhotoPath, tags })
     .returning();
 
   if (rating !== undefined && reviewText) {
@@ -121,6 +127,7 @@ export async function POST(request: Request) {
       author: createdBy,
       rating,
       text: reviewText,
+      likes: 0,
     });
   }
 

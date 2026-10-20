@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useEffect, useCallback } from "react";
+import { useRef, useState, useEffect, useCallback, useMemo } from "react";
 import { Camera, Check, ImagePlus, RotateCcw, SwitchCamera } from "lucide-react";
 
 type PhotoCaptureProps = {
@@ -67,40 +67,55 @@ export default function PhotoCapture({ label, onPhoto, required = true, preview 
   const [capturedFile, setCapturedFile] = useState<File | null>(null);
   const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
 
+  // Камера живёт ровно столько, сколько показан видоискатель: эффект сам
+  // открывает поток и в cleanup гарантированно его закрывает (раньше stopCamera
+  // видел устаревший stream из замыкания, и камера не выключалась).
+  const cameraActive = mode === "camera" && !capturedFile && !preview;
   useEffect(() => {
-    if (mode === "camera") {
-      startCamera();
-    } else {
-      stopCamera();
-    }
-    return () => stopCamera();
-  }, [mode, facingMode]);
+    if (!cameraActive) return;
+    let cancelled = false;
+    let mediaStream: MediaStream | null = null;
+    const video = videoRef.current;
 
-  const startCamera = async () => {
-    try {
-      setError(null);
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
+    Promise.resolve()
+      .then(() =>
+        navigator.mediaDevices.getUserMedia({
+          video: { facingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
+        }),
+      )
+      .then((s) => {
+        if (cancelled) {
+          s.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        mediaStream = s;
+        setStream(s);
+        if (videoRef.current) videoRef.current.srcObject = s;
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setError("Не удалось получить доступ к камере. Выберите фото из галереи.");
+        setMode("file");
       });
-      setStream(mediaStream);
-      if (videoRef.current) {
-        videoRef.current.srcObject = mediaStream;
-      }
-    } catch (err) {
-      setError("Не удалось получить доступ к камере. Попробуйте загрузить файл.");
-      setMode("file");
-    }
-  };
 
-  const stopCamera = () => {
-    if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
+    return () => {
+      cancelled = true;
+      mediaStream?.getTracks().forEach((t) => t.stop());
+      if (video) video.srcObject = null;
       setStream(null);
-    }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
-  };
+    };
+  }, [cameraActive, facingMode]);
+
+  // Превью выбранного фото: один object URL на файл, освобождаем при смене
+  const previewUrl = useMemo(
+    () => (capturedFile ? URL.createObjectURL(capturedFile) : null),
+    [capturedFile],
+  );
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
 
   const capture = useCallback(() => {
     const video = videoRef.current;
@@ -149,7 +164,7 @@ export default function PhotoCapture({ label, onPhoto, required = true, preview 
       {(capturedFile || preview) ? (
         <div className="group relative overflow-hidden rounded-2xl ring-1 ring-sand">
           <img
-            src={capturedFile ? URL.createObjectURL(capturedFile) : preview!}
+            src={previewUrl ?? preview!}
             alt="Превью"
             className="h-44 w-full object-cover"
           />
@@ -168,7 +183,7 @@ export default function PhotoCapture({ label, onPhoto, required = true, preview 
       ) : (
         <>
           <div className="flex gap-1 rounded-full bg-sand/70 p-1">
-            <button type="button" onClick={() => setMode("camera")} className={tabClass(mode === "camera")}>
+            <button type="button" onClick={() => { setError(null); setMode("camera"); }} className={tabClass(mode === "camera")}>
               <Camera size={14} /> Камера
             </button>
             <button type="button" onClick={() => setMode("file")} className={tabClass(mode === "file")}>
@@ -179,7 +194,7 @@ export default function PhotoCapture({ label, onPhoto, required = true, preview 
           {error && <p className="text-xs font-medium text-tangerine-dark">{error}</p>}
 
           {mode === "camera" && (
-            <div className="relative overflow-hidden rounded-2xl bg-ink">
+            <div className="relative overflow-hidden rounded-2xl bg-night">
               <video
                 ref={videoRef}
                 autoPlay

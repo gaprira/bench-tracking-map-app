@@ -14,10 +14,28 @@
   --color-tangerine: #ff6a2b;
   --color-tangerine-dark: #e85513;
   --color-sun: #ffb020;
+  /* Всегда тёмный: затемнения на фото, фон модалок и лайтбокса */
+  --color-night: #111813;
 
   --font-sans: "Manrope Variable", system-ui, -apple-system, "Segoe UI", Roboto,
     sans-serif;
   --font-display: "Unbounded Variable", "Manrope Variable", system-ui, sans-serif;
+}
+
+/* Тёмная тема — по настройке телефона/компьютера */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --color-cream: #111713;
+    --color-paper: #1a221d;
+    --color-sand: #29332c;
+    --color-sand-dark: #3a463e;
+    --color-ink: #edf0e8;
+    --color-ink-soft: #a1aca3;
+    --color-forest: #22472f;
+    --color-forest-light: #a6cd84;
+    --color-moss: #a9cf87;
+  }
 }
 
 html,
@@ -122,12 +140,12 @@ body {
   border-radius: 14px;
   padding: 8px 12px;
   border: 0;
-  background: var(--color-ink);
+  background: var(--color-night);
   color: #fff;
   box-shadow: 0 10px 30px -8px rgb(0 0 0 / 0.35);
 }
 .leaflet-tooltip-top::before {
-  border-top-color: var(--color-ink);
+  border-top-color: var(--color-night);
 }
 .leaflet-control-zoom {
   border: 0 !important;
@@ -144,7 +162,8 @@ body {
   border-color: var(--color-sand) !important;
 }
 .leaflet-control-attribution {
-  background: rgb(255 252 245 / 0.75) !important;
+  background: color-mix(in srgb, var(--color-paper) 75%, transparent) !important;
+  color: var(--color-ink-soft);
   backdrop-filter: blur(6px);
   border-radius: 10px 0 0 0;
   font-size: 10px;
@@ -230,6 +249,70 @@ body {
   font-weight: 700;
   border: 3px solid #fff;
   box-shadow: 0 8px 20px -6px rgb(232 85 19 / 0.7);
+}
+
+/* Группа меток: число скамеек и средняя оценка */
+.bench-cluster {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: var(--color-forest);
+  color: #fff;
+  line-height: 1;
+  border: 3px solid var(--color-paper);
+  box-shadow: 0 10px 24px -8px rgb(23 34 27 / 0.55);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.bench-cluster b {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 700;
+}
+.bench-cluster span {
+  margin-top: 2px;
+  font-size: 9px;
+  font-weight: 800;
+  color: var(--color-moss);
+}
+.bench-cluster:hover {
+  transform: scale(1.08);
+}
+
+/* «Я здесь» */
+.user-dot {
+  position: relative;
+  width: 22px;
+  height: 22px;
+}
+.user-dot__pulse {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: #3b82f6;
+  animation: ping-soft 2s ease-out infinite;
+}
+.user-dot__core {
+  position: absolute;
+  inset: 3px;
+  border-radius: 9999px;
+  background: #3b82f6;
+  border: 3px solid #fff;
+  box-shadow: 0 2px 8px rgb(59 130 246 / 0.6);
+}
+
+/* Тёмная карта: инвертируем тайлы OSM и возвращаем оттенки */
+@media (prefers-color-scheme: dark) {
+  .leaflet-container {
+    background: #1b211d;
+  }
+  .leaflet-tile-pane {
+    filter: invert(1) hue-rotate(180deg) brightness(0.85) contrast(0.9) saturate(0.35);
+  }
+  .leaflet-control-attribution a {
+    color: var(--color-moss);
+  }
 }
 
 /* На телефоне карту двигают пальцами, а низ закрыт шторкой */

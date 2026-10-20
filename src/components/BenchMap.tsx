@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import L from "leaflet";
 import {
   MapContainer,
@@ -11,7 +11,9 @@ import {
   useMap,
   useMapEvents,
 } from "react-leaflet";
+import MarkerClusterGroup from "react-leaflet-cluster";
 import "leaflet/dist/leaflet.css";
+import "react-leaflet-cluster/dist/assets/MarkerCluster.css";
 import type { BenchSummary } from "@/lib/types";
 
 type Props = {
@@ -19,6 +21,7 @@ type Props = {
   selectedId: number | null;
   draft: { lat: number; lng: number } | null;
   focus: { lat: number; lng: number; zoom?: number } | null;
+  userPos: { lat: number; lng: number } | null;
   onSelect: (id: number) => void;
   onMapClick: (lat: number, lng: number) => void;
 };
@@ -42,6 +45,31 @@ const draftIcon = L.divIcon({
   iconSize: [44, 44],
   iconAnchor: [22, 22],
 });
+
+const userIcon = L.divIcon({
+  className: "",
+  html: `<div class="user-dot"><span class="user-dot__pulse"></span><span class="user-dot__core"></span></div>`,
+  iconSize: [22, 22],
+  iconAnchor: [11, 11],
+});
+
+// Кружок группы: число скамеек + средняя оценка внутри группы
+const clusterIcon = (cluster: L.MarkerCluster) => {
+  const markers = cluster.getAllChildMarkers();
+  const ratings = markers
+    .map((m) => (m.options as { rating?: number | null }).rating)
+    .filter((r): r is number => typeof r === "number");
+  const avg = ratings.length ? ratings.reduce((a, b) => a + b, 0) / ratings.length : null;
+  const n = markers.length;
+  const size = n < 10 ? 46 : n < 50 ? 54 : 62;
+  return L.divIcon({
+    className: "",
+    html: `<div class="bench-cluster" style="width:${size}px;height:${size}px">
+      <b>${n}</b>${avg !== null ? `<span>★ ${avg.toFixed(1)}</span>` : ""}</div>`,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+  });
+};
 
 function ratingColor(avg: number | null) {
   if (avg === null) return "#a3aca5";
@@ -104,11 +132,37 @@ function AutoResize() {
   return null;
 }
 
+// Один раз после загрузки показываем все скамейки (а не Москву по умолчанию).
+// Учитываем, что панель закрывает часть карты: слева на десктопе, снизу на телефоне.
+function FitOnce({ benches, skip }: { benches: BenchSummary[]; skip: boolean }) {
+  const map = useMap();
+  const done = useRef(false);
+  useEffect(() => {
+    if (done.current || benches.length === 0) return;
+    done.current = true;
+    if (skip) return;
+    const points = benches
+      .filter((b) => Number.isFinite(b.lat) && Number.isFinite(b.lng))
+      .map((b) => L.latLng(b.lat, b.lng));
+    if (points.length === 0) return;
+    const desktop = map.getContainer().clientWidth >= 768;
+    const options: L.FitBoundsOptions = {
+      paddingTopLeft: desktop ? [470, 100] : [30, 90],
+      paddingBottomRight: desktop ? [70, 60] : [30, 170],
+      maxZoom: 15,
+      animate: false,
+    };
+    map.fitBounds(L.latLngBounds(points), options);
+  }, [benches, skip, map]);
+  return null;
+}
+
 export default function BenchMap({
   benches,
   selectedId,
   draft,
   focus,
+  userPos,
   onSelect,
   onMapClick,
 }: Props) {
@@ -129,13 +183,23 @@ export default function BenchMap({
       <ClickHandler onMapClick={onMapClick} />
       <FocusHandler focus={focus} />
       <AutoResize />
+      <FitOnce benches={benches} skip={focus !== null} />
 
+      <MarkerClusterGroup
+        iconCreateFunction={clusterIcon}
+        showCoverageOnHover={false}
+        maxClusterRadius={50}
+        spiderfyOnMaxZoom
+        chunkedLoading
+      >
       {benches
         .filter((b) => Number.isFinite(b.lat) && Number.isFinite(b.lng))
         .map((b) => (
         <Marker
           key={b.id}
           position={[b.lat, b.lng]}
+          // оценка нужна кружку группы для средней
+          {...({ rating: b.avgRating } as object)}
           icon={benchIcon(ratingColor(b.avgRating), b.avgRating, b.id === selectedId)}
           eventHandlers={{
             click: (e) => {
@@ -156,6 +220,11 @@ export default function BenchMap({
           </Tooltip>
         </Marker>
       ))}
+      </MarkerClusterGroup>
+
+      {userPos && (
+        <Marker position={[userPos.lat, userPos.lng]} icon={userIcon} interactive={false} />
+      )}
 
       {draft && Number.isFinite(draft.lat) && Number.isFinite(draft.lng) && (
         <Marker position={[draft.lat, draft.lng]} icon={draftIcon} />

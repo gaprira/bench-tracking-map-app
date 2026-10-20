@@ -12,8 +12,14 @@ if (!databaseUrl) {
   // эмулируя drizzle-запросы (select/where/orderBy/insert/delete + агрегаты).
   type MockRow = Record<string, any>;
 
-  const mockTables = new Map<string, MockRow[]>();
-  const mockIdCounters = new Map<string, number>();
+  // Храним в globalThis: одна мок-база на процесс — общая для страниц и API
+  // и переживает горячую перезагрузку в dev
+  const globalForMock = globalThis as typeof globalThis & {
+    __benchMock?: { tables: Map<string, MockRow[]>; ids: Map<string, number> };
+  };
+  globalForMock.__benchMock ??= { tables: new Map(), ids: new Map() };
+  const mockTables = globalForMock.__benchMock.tables;
+  const mockIdCounters = globalForMock.__benchMock.ids;
 
   const tableRows = (table: string): MockRow[] => {
     if (!mockTables.has(table)) mockTables.set(table, []);
@@ -279,6 +285,41 @@ if (!databaseUrl) {
     max: 5,
   });
   if (process.env.NODE_ENV !== "production") { globalForDb.__arenaNextJsPostgresqlPool = pool; }
+
+  // Самомиграция: новые колонки (теги скамеек, лайки рецензий) добавляются при
+  // первом запросе после деплоя — адрес облачной базы секретный, снаружи его
+  // не достать. Сначала проверяем information_schema, ALTER — только если нужно.
+  // Все запросы ждут, пока проверка закончится.
+  const p = pool as Pool & { __benchSchemaPatched?: boolean };
+  if (!p.__benchSchemaPatched) {
+    p.__benchSchemaPatched = true;
+    const rawQuery = p.query.bind(p) as (...args: unknown[]) => Promise<unknown>;
+    const ready = (async () => {
+      const res = (await rawQuery(
+        `SELECT table_name, column_name FROM information_schema.columns
+         WHERE (table_name = 'benches' AND column_name = 'tags')
+            OR (table_name = 'reviews' AND column_name = 'likes')`,
+      )) as { rows: { table_name: string }[] };
+      const has = new Set(res.rows.map((r) => r.table_name));
+      if (!has.has("benches")) {
+        await rawQuery(
+          `ALTER TABLE benches ADD COLUMN IF NOT EXISTS tags text[] NOT NULL DEFAULT '{}'::text[]`,
+        );
+      }
+      if (!has.has("reviews")) {
+        await rawQuery(
+          `ALTER TABLE reviews ADD COLUMN IF NOT EXISTS likes integer NOT NULL DEFAULT 0`,
+        );
+      }
+    })().catch((err) => {
+      console.error("Не удалось проверить/обновить схему БД:", err);
+    });
+    (p as { query: unknown }).query = async (...args: unknown[]) => {
+      await ready;
+      return rawQuery(...args);
+    };
+  }
+
   db = drizzle(pool);
 }
 

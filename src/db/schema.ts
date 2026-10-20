@@ -7,7 +7,7 @@ import {
   timestamp,
   varchar,
 } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 
 export const benches = pgTable("benches", {
   id: serial("id").primaryKey(),
@@ -18,6 +18,8 @@ export const benches = pgTable("benches", {
   createdBy: varchar("created_by", { length: 80 }).notNull().default("Аноним"),
   benchPhoto: text("bench_photo"),
   viewPhoto: text("view_photo"),
+  // id удобств из src/lib/tags.ts
+  tags: text("tags").array().notNull().default(sql`'{}'::text[]`),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -29,6 +31,8 @@ export const reviews = pgTable("reviews", {
   author: varchar("author", { length: 80 }).notNull().default("Аноним"),
   rating: integer("rating").notNull(),
   text: text("text").notNull(),
+  // «Полезно»: счётчик без аккаунтов, повторы отсекает браузер (localStorage)
+  likes: integer("likes").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

@@ -1,21 +1,25 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import {
   AlertCircle,
   ArrowLeft,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
+  Check,
   Clock,
+  Heart,
   LocateFixed,
+  Navigation,
   MapPin,
   MessageSquare,
   Pencil,
   Plus,
   Search,
   Send,
+  Share2,
   Shield,
   ShieldCheck,
   Star,
@@ -25,13 +29,14 @@ import {
   X,
 } from "lucide-react";
 import type { BenchDetails, BenchSummary } from "@/lib/types";
+import { BENCH_TAGS, tagLabel } from "@/lib/tags";
 import Stars from "./Stars";
 import PhotoCapture from "./PhotoCapture";
 
 const BenchMap = dynamic(() => import("./BenchMap"), {
   ssr: false,
   loading: () => (
-    <div className="flex h-full w-full items-center justify-center bg-[#e9e5da]">
+    <div className="flex h-full w-full items-center justify-center bg-sand">
       <span className="flex items-center gap-2 rounded-full bg-paper px-4 py-2 text-sm font-semibold text-ink-soft shadow">
         <span className="h-2 w-2 animate-ping rounded-full bg-tangerine" />
         Загружаем карту…
@@ -42,7 +47,25 @@ const BenchMap = dynamic(() => import("./BenchMap"), {
 
 type Draft = { lat: number; lng: number };
 type Focus = { lat: number; lng: number; zoom?: number } | null;
-type Sort = "new" | "rating" | "reviews";
+type Sort = "new" | "rating" | "reviews" | "near";
+type LatLng = { lat: number; lng: number };
+
+// Расстояние по прямой (формула гаверсинуса), метры
+function distanceM(a: LatLng, b: LatLng) {
+  const R = 6371000;
+  const rad = (d: number) => (d * Math.PI) / 180;
+  const dLat = rad(b.lat - a.lat);
+  const dLng = rad(b.lng - a.lng);
+  const h =
+    Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+function formatDistance(m: number) {
+  if (m < 1000) return `${Math.max(10, Math.round(m / 10) * 10)} м`;
+  if (m < 10000) return `${(m / 1000).toFixed(1).replace(".", ",")} км`;
+  return `${Math.round(m / 1000)} км`;
+}
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("ru-RU", {
@@ -73,7 +96,7 @@ const AVATAR_COLORS = [
   "bg-tangerine text-paper",
   "bg-moss text-forest",
   "bg-sun text-ink",
-  "bg-ink text-sun",
+  "bg-ink text-paper",
 ];
 
 // Те же цвета, что у меток на карте (BenchMap грузится только в браузере,
@@ -113,48 +136,83 @@ function BenchGlyph({ size = 22, className = "" }: { size?: number; className?: 
   );
 }
 
-export default function BenchApp() {
+// Строка в localStorage как внешнее хранилище: на сервере — "", в браузере —
+// сохранённое значение; изменения из другой вкладки тоже подхватываются.
+const LOCAL_EVENT = "bench-local-storage";
+function useStoredString(key: string): [string, (v: string) => void] {
+  const subscribe = useCallback(
+    (onChange: () => void) => {
+      const handler = (e: Event) => {
+        if (!(e instanceof StorageEvent) || e.key === key) onChange();
+      };
+      window.addEventListener("storage", handler);
+      window.addEventListener(LOCAL_EVENT, handler);
+      return () => {
+        window.removeEventListener("storage", handler);
+        window.removeEventListener(LOCAL_EVENT, handler);
+      };
+    },
+    [key],
+  );
+  const value = useSyncExternalStore(
+    subscribe,
+    () => {
+      try {
+        return window.localStorage.getItem(key) ?? "";
+      } catch {
+        return "";
+      }
+    },
+    () => "",
+  );
+  const setValue = useCallback(
+    (v: string) => {
+      try {
+        if (v) window.localStorage.setItem(key, v);
+        else window.localStorage.removeItem(key);
+      } catch {
+        // приватный режим / хранилище запрещено — просто не запоминаем
+      }
+      window.dispatchEvent(new Event(LOCAL_EVENT));
+    },
+    [key],
+  );
+  return [value, setValue];
+}
+
+async function fetchJson<T>(url: string): Promise<T> {
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) throw new Error(String(res.status));
+  return res.json();
+}
+
+export default function BenchApp({ initialBenchId }: { initialBenchId?: number } = {}) {
   const [benches, setBenches] = useState<BenchSummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  // Открыли ссылку /bench/12 — сразу показываем эту скамейку
+  const [selectedId, setSelectedId] = useState<number | null>(initialBenchId ?? null);
+  const [tagFilter, setTagFilter] = useState<string[]>([]);
+  const [notice, setNotice] = useState<string | null>(null);
   const [details, setDetails] = useState<BenchDetails | null>(null);
-  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [detailsLoading, setDetailsLoading] = useState(initialBenchId !== undefined);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [addMode, setAddMode] = useState(false);
   const [focus, setFocus] = useState<Focus>(null);
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<Sort>("new");
   const [error, setError] = useState<string | null>(null);
-  const [author, setAuthor] = useState("");
+  const [author, setAuthor] = useStoredString("bench-author");
   // На телефоне: "map" — шторка свёрнута, "list" — развёрнута
-  const [mobileTab, setMobileTab] = useState<"map" | "list">("map");
+  const [mobileTab, setMobileTab] = useState<"map" | "list">(initialBenchId ? "list" : "map");
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [adminKey, setAdminKey] = useState("");
+  const [adminKey, setAdminKey] = useStoredString("bench-admin-key");
   const [showAdminLogin, setShowAdminLogin] = useState(false);
-
-  useEffect(() => {
-    const saved = window.localStorage.getItem("bench-author");
-    if (saved) setAuthor(saved);
-  }, []);
-  useEffect(() => {
-    window.localStorage.setItem("bench-author", author);
-  }, [author]);
-
-  useEffect(() => {
-    const savedAdmin = window.localStorage.getItem("bench-admin-key");
-    if (savedAdmin) setAdminKey(savedAdmin);
-  }, []);
-  useEffect(() => {
-    if (adminKey) window.localStorage.setItem("bench-admin-key", adminKey);
-    else window.localStorage.removeItem("bench-admin-key");
-  }, [adminKey]);
+  const [userPos, setUserPos] = useState<LatLng | null>(null);
 
   const loadBenches = useCallback(async () => {
     try {
-      const res = await fetch("/api/benches", { cache: "no-store" });
-      if (!res.ok) throw new Error();
-      setBenches(await res.json());
+      setBenches(await fetchJson<BenchSummary[]>("/api/benches"));
     } catch {
       setError("Не удалось загрузить скамейки");
     } finally {
@@ -165,9 +223,7 @@ export default function BenchApp() {
   const loadDetails = useCallback(async (id: number) => {
     setDetailsLoading(true);
     try {
-      const res = await fetch(`/api/benches/${id}`, { cache: "no-store" });
-      if (!res.ok) throw new Error();
-      setDetails(await res.json());
+      setDetails(await fetchJson<BenchDetails>(`/api/benches/${id}`));
     } catch {
       setError("Не удалось загрузить скамейку");
       setDetails(null);
@@ -176,19 +232,74 @@ export default function BenchApp() {
     }
   }, []);
 
+  // Первая загрузка списка (состояние меняется только в колбэках промиса)
   useEffect(() => {
-    loadBenches();
-  }, [loadBenches]);
+    fetchJson<BenchSummary[]>("/api/benches")
+      .then((list) => {
+        setBenches(list);
+        if (initialBenchId !== undefined) {
+          const b = list.find((x) => x.id === initialBenchId);
+          if (b) setFocus({ lat: b.lat, lng: b.lng, zoom: 16 });
+          loadDetails(initialBenchId);
+        }
+      })
+      .catch(() => setError("Не удалось загрузить скамейки"))
+      .finally(() => setLoading(false));
+  }, [initialBenchId, loadDetails]);
 
-  useEffect(() => {
-    if (selectedId !== null) loadDetails(selectedId);
-    else setDetails(null);
-  }, [selectedId, loadDetails]);
+  // Единая точка выбора скамейки: сразу грузим карточку, без эффекта на selectedId.
+  // Адрес в строке браузера — /bench/12, чтобы ссылкой можно было поделиться.
+  const selectBench = (id: number | null) => {
+    setSelectedId(id);
+    if (id === null) setDetails(null);
+    else loadDetails(id);
+    const path = id === null ? "/" : `/bench/${id}`;
+    if (window.location.pathname !== path) window.history.replaceState(null, "", path);
+    const title = id === null ? undefined : benches.find((b) => b.id === id)?.title;
+    document.title = title ? `${title} — Скамейки` : "Скамейки — карта и рецензии";
+  };
+
+  const shareBench = async (bench: { id: number; title: string }) => {
+    const url = `${window.location.origin}/bench/${bench.id}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: bench.title, text: `Скамейка «${bench.title}»`, url });
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      setNotice("Ссылка скопирована");
+    } catch (err) {
+      // пользователь закрыл окно «Поделиться» — это не ошибка
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      setError("Не удалось поделиться ссылкой");
+    }
+  };
+
+  const requestPosition = (onDone?: (p: LatLng) => void) => {
+    if (!navigator.geolocation) {
+      setError("Геолокация недоступна в этом браузере");
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const p = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setUserPos(p);
+        onDone?.(p);
+      },
+      () => setError("Не удалось определить местоположение"),
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 },
+    );
+  };
+
+  const handleSort = (next: Sort) => {
+    setSort(next);
+    if (next === "near" && !userPos) requestPosition();
+  };
 
   const handleSelect = (id: number) => {
     setDraft(null);
     setAddMode(false);
-    setSelectedId(id);
+    selectBench(id);
     const b = benches.find((x) => x.id === id);
     if (b) setFocus({ lat: b.lat, lng: b.lng });
     setMobileTab("list");
@@ -197,7 +308,7 @@ export default function BenchApp() {
   const handleMapClick = (lat: number, lng: number) => {
     if (!addMode) return;
     setDraft({ lat, lng });
-    setSelectedId(null);
+    selectBench(null);
     setMobileTab("list");
   };
 
@@ -205,7 +316,7 @@ export default function BenchApp() {
     setBenches((prev) => [bench, ...prev]);
     setDraft(null);
     setAddMode(false);
-    setSelectedId(bench.id);
+    selectBench(bench.id);
     setFocus({ lat: bench.lat, lng: bench.lng });
   };
 
@@ -231,7 +342,7 @@ export default function BenchApp() {
       });
       if (res.ok) {
         setBenches((prev) => prev.filter((b) => b.id !== deleteTarget));
-        setSelectedId(null);
+        selectBench(null);
       } else {
         setError("Не удалось удалить скамейку");
       }
@@ -244,41 +355,42 @@ export default function BenchApp() {
   };
 
   const locateMe = () => {
-    if (!navigator.geolocation) {
-      setError("Геолокация недоступна в этом браузере");
-      return;
-    }
     setMobileTab("map");
-    navigator.geolocation.getCurrentPosition(
-      (pos) =>
-        setFocus({ lat: pos.coords.latitude, lng: pos.coords.longitude, zoom: 16 }),
-      () => setError("Не удалось определить местоположение"),
-    );
+    requestPosition((p) => setFocus({ ...p, zoom: 16 }));
   };
 
   const toggleAddMode = () => {
     setAddMode((v) => !v);
     setDraft(null);
-    setSelectedId(null);
+    selectBench(null);
     setMobileTab("map");
   };
 
+  // Расстояние до каждой скамейки (если знаем, где пользователь)
+  const distances = useMemo(() => {
+    const m = new Map<number, number>();
+    if (userPos) for (const b of benches) m.set(b.id, distanceM(userPos, b));
+    return m;
+  }, [benches, userPos]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const list = q
-      ? benches.filter(
-          (b) =>
-            b.title.toLowerCase().includes(q) ||
-            (b.description ?? "").toLowerCase().includes(q),
-        )
-      : [...benches];
+    const list = benches.filter(
+      (b) =>
+        (!q ||
+          b.title.toLowerCase().includes(q) ||
+          (b.description ?? "").toLowerCase().includes(q)) &&
+        tagFilter.every((t) => (b.tags ?? []).includes(t)),
+    );
     list.sort((a, b) => {
       if (sort === "rating") return (b.avgRating ?? 0) - (a.avgRating ?? 0);
       if (sort === "reviews") return b.reviewCount - a.reviewCount;
+      if (sort === "near" && distances.size)
+        return (distances.get(a.id) ?? Infinity) - (distances.get(b.id) ?? Infinity);
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
     return list;
-  }, [benches, search, sort]);
+  }, [benches, search, sort, tagFilter, distances]);
 
   const stats = useMemo(() => {
     const total = benches.length;
@@ -296,6 +408,11 @@ export default function BenchApp() {
     const t = setTimeout(() => setError(null), 4000);
     return () => clearTimeout(t);
   }, [error]);
+  useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(() => setNotice(null), 2500);
+    return () => clearTimeout(t);
+  }, [notice]);
 
   const sheetOpen = mobileTab === "list";
 
@@ -304,10 +421,12 @@ export default function BenchApp() {
       {/* Карта на весь экран */}
       <div className="absolute inset-0 isolate">
         <BenchMap
-          benches={benches}
+          // на карте — те же скамейки, что в списке (с учётом поиска и фильтра)
+          benches={filtered}
           selectedId={selectedId}
           draft={draft}
           focus={focus}
+          userPos={userPos}
           onSelect={handleSelect}
           onMapClick={handleMapClick}
         />
@@ -363,7 +482,7 @@ export default function BenchApp() {
             aria-label={addMode ? "Отмена" : "Добавить скамейку"}
             className={`flex h-10 w-10 items-center justify-center gap-1.5 rounded-full text-sm font-bold transition active:scale-95 sm:w-auto sm:px-4 ${
               addMode
-                ? "bg-ink text-white"
+                ? "bg-ink text-paper"
                 : "bg-tangerine text-white shadow-lg shadow-tangerine/35 hover:bg-tangerine-dark"
             }`}
           >
@@ -376,7 +495,7 @@ export default function BenchApp() {
       {/* Подсказка в режиме добавления */}
       {addMode && !draft && (
         <div className="pointer-events-none absolute left-1/2 top-[72px] z-30 -translate-x-1/2 animate-rise md:top-[84px]">
-          <div className="flex items-center gap-2 whitespace-nowrap rounded-full bg-ink px-4 py-2.5 text-sm font-semibold text-white shadow-xl">
+          <div className="flex items-center gap-2 whitespace-nowrap rounded-full bg-ink px-4 py-2.5 text-sm font-semibold text-paper shadow-xl">
             <span className="relative flex h-2.5 w-2.5">
               <span className="absolute inset-0 animate-ping rounded-full bg-tangerine" />
               <span className="relative h-2.5 w-2.5 rounded-full bg-tangerine" />
@@ -428,10 +547,13 @@ export default function BenchApp() {
             loading={detailsLoading}
             author={author}
             onAuthorChange={setAuthor}
-            onBack={() => setSelectedId(null)}
+            key={selectedId}
+            onBack={() => selectBench(null)}
             onDelete={() => handleDelete(selectedId)}
             onReviewAdded={handleReviewAdded}
             onError={setError}
+            onShare={shareBench}
+            distance={selectedId !== null ? distances.get(selectedId) : undefined}
             isAdmin={Boolean(adminKey)}
             adminKey={adminKey}
           />
@@ -443,7 +565,10 @@ export default function BenchApp() {
             search={search}
             onSearch={setSearch}
             sort={sort}
-            onSort={setSort}
+            onSort={handleSort}
+            tagFilter={tagFilter}
+            onTagFilter={setTagFilter}
+            distances={distances}
             onSelect={handleSelect}
             onExpand={() => setMobileTab("list")}
             onStartAdd={() => {
@@ -454,9 +579,18 @@ export default function BenchApp() {
         )}
       </aside>
 
+      {notice && !error && (
+        <div className="absolute left-1/2 top-[72px] z-[3000] -translate-x-1/2 animate-rise md:top-[84px]">
+          <div className="flex items-center gap-2 whitespace-nowrap rounded-full bg-forest px-4 py-2.5 text-sm font-semibold text-white shadow-2xl">
+            <Check size={17} className="text-moss" strokeWidth={3} />
+            {notice}
+          </div>
+        </div>
+      )}
+
       {error && (
         <div className="absolute left-1/2 top-[72px] z-[3000] -translate-x-1/2 animate-rise md:top-[84px]">
-          <div className="flex items-center gap-2 rounded-full bg-ink px-4 py-2.5 text-sm font-semibold text-white shadow-2xl">
+          <div className="flex items-center gap-2 rounded-full bg-ink px-4 py-2.5 text-sm font-semibold text-paper shadow-2xl">
             <AlertCircle size={17} className="text-tangerine" />
             {error}
           </div>
@@ -512,7 +646,7 @@ export default function BenchApp() {
 function Modal({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
   return (
     <div
-      className="fixed inset-0 z-[4000] flex animate-fade-in items-end justify-center bg-ink/50 p-3 backdrop-blur-sm sm:items-center sm:p-4"
+      className="fixed inset-0 z-[4000] flex animate-fade-in items-end justify-center bg-night/50 p-3 backdrop-blur-sm sm:items-center sm:p-4"
       onClick={onClose}
     >
       <div
@@ -631,7 +765,7 @@ function Lightbox({
 
   return (
     <div
-      className="fixed inset-0 z-[5000] flex animate-fade-in items-center justify-center bg-ink/90 p-4 backdrop-blur-md"
+      className="fixed inset-0 z-[5000] flex animate-fade-in items-center justify-center bg-night/90 p-4 backdrop-blur-md"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
@@ -640,7 +774,7 @@ function Lightbox({
         <img
           src={photo.src}
           alt={photo.caption}
-          className="max-h-[80vh] w-auto max-w-full rounded-[24px] bg-ink object-contain shadow-2xl"
+          className="max-h-[80vh] w-auto max-w-full rounded-[24px] bg-night object-contain shadow-2xl"
         />
         {index > 0 && (
           <button onClick={() => onIndex(index - 1)} aria-label="Предыдущее фото" className={`${navBtn} left-3`}>
@@ -663,7 +797,7 @@ function Lightbox({
         <button
           onClick={onClose}
           aria-label="Закрыть"
-          className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-full bg-ink/50 text-white backdrop-blur-md transition hover:rotate-90 hover:bg-ink/70"
+          className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-full bg-night/50 text-white backdrop-blur-md transition hover:rotate-90 hover:bg-night/70"
         >
           <X size={20} />
         </button>
@@ -677,8 +811,48 @@ function Lightbox({
 const SORTS: { key: Sort; label: string; icon: typeof Clock }[] = [
   { key: "new", label: "Новые", icon: Clock },
   { key: "rating", label: "Лучшие", icon: TrendingUp },
-  { key: "reviews", label: "Обсуждаемые", icon: MessageSquare },
+  { key: "reviews", label: "Отзывы", icon: MessageSquare },
+  { key: "near", label: "Рядом", icon: Navigation },
 ];
+
+/** Чипы удобств: выбор при добавлении/редактировании и фильтр списка */
+function TagChips({
+  value,
+  onChange,
+  size = "md",
+}: {
+  value: string[];
+  onChange: (v: string[]) => void;
+  size?: "sm" | "md";
+}) {
+  const toggle = (id: string) =>
+    onChange(value.includes(id) ? value.filter((t) => t !== id) : [...value, id]);
+  return (
+    <>
+      {BENCH_TAGS.map((t) => {
+        const on = value.includes(t.id);
+        return (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => toggle(t.id)}
+            aria-pressed={on}
+            className={`inline-flex shrink-0 items-center gap-1 rounded-full border font-bold transition active:scale-95 ${
+              size === "sm" ? "px-3 py-1.5 text-xs" : "px-3.5 py-2 text-sm"
+            } ${
+              on
+                ? "border-forest bg-forest text-moss"
+                : "border-sand bg-paper text-ink-soft hover:border-sand-dark hover:text-ink"
+            }`}
+          >
+            {on && <Check size={size === "sm" ? 12 : 14} strokeWidth={3} />}
+            {t.label}
+          </button>
+        );
+      })}
+    </>
+  );
+}
 
 function BenchList({
   benches,
@@ -688,6 +862,9 @@ function BenchList({
   onSearch,
   sort,
   onSort,
+  tagFilter,
+  onTagFilter,
+  distances,
   onSelect,
   onExpand,
   onStartAdd,
@@ -699,10 +876,14 @@ function BenchList({
   onSearch: (v: string) => void;
   sort: Sort;
   onSort: (v: Sort) => void;
+  tagFilter: string[];
+  onTagFilter: (v: string[]) => void;
+  distances: Map<number, number>;
   onSelect: (id: number) => void;
   onExpand: () => void;
   onStartAdd: () => void;
 }) {
+  const filtering = Boolean(search.trim()) || tagFilter.length > 0;
   return (
     <>
       <div className="shrink-0 px-5 pb-3 pt-2 md:pt-6">
@@ -755,6 +936,10 @@ function BenchList({
             </button>
           ))}
         </div>
+        {/* Фильтр по удобствам: горизонтальная лента чипов */}
+        <div className="-mx-5 mt-3 flex gap-1.5 overflow-x-auto px-5 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <TagChips value={tagFilter} onChange={onTagFilter} size="sm" />
+        </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-6 pt-1">
@@ -770,14 +955,19 @@ function BenchList({
               <BenchGlyph size={40} />
             </div>
             <p className="font-display text-base font-bold text-ink">
-              {search ? "Ничего не нашли" : "Пока пусто"}
+              {filtering ? "Ничего не нашли" : "Пока пусто"}
             </p>
             <p className="mt-1 text-sm text-ink-soft">
-              {search
-                ? "Попробуйте другой запрос"
+              {filtering
+                ? "Попробуйте другой запрос или уберите фильтры"
                 : "Отметьте первую скамейку — это займёт минуту"}
             </p>
-            {!search && (
+            {tagFilter.length > 0 && (
+              <button onClick={() => onTagFilter([])} className={`${ghostBtn} mt-5`}>
+                Сбросить фильтры
+              </button>
+            )}
+            {!filtering && (
               <button onClick={onStartAdd} className={`${primaryBtn} mt-5`}>
                 <Plus size={17} strokeWidth={2.75} />
                 Отметить первую
@@ -788,7 +978,7 @@ function BenchList({
           <ul className="space-y-3">
             {benches.map((b, i) => (
               <li key={b.id} className="animate-rise" style={{ animationDelay: `${Math.min(i, 8) * 45}ms` }}>
-                <BenchCard bench={b} onSelect={onSelect} />
+                <BenchCard bench={b} distance={distances.get(b.id)} onSelect={onSelect} />
               </li>
             ))}
           </ul>
@@ -798,7 +988,15 @@ function BenchList({
   );
 }
 
-function BenchCard({ bench: b, onSelect }: { bench: BenchSummary; onSelect: (id: number) => void }) {
+function BenchCard({
+  bench: b,
+  distance,
+  onSelect,
+}: {
+  bench: BenchSummary;
+  distance?: number;
+  onSelect: (id: number) => void;
+}) {
   return (
     <button
       onClick={() => onSelect(b.id)}
@@ -812,12 +1010,12 @@ function BenchCard({ bench: b, onSelect }: { bench: BenchSummary; onSelect: (id:
           className="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-105"
         />
       ) : (
-        <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-forest-light to-forest text-moss/40">
+        <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-forest to-night text-moss/40">
           <BenchGlyph size={96} />
         </div>
       )}
       <span className="grain absolute inset-0" />
-      <span className="absolute inset-0 bg-gradient-to-t from-ink/85 via-ink/15 to-transparent" />
+      <span className="absolute inset-0 bg-gradient-to-t from-night/85 via-night/15 to-transparent" />
 
       <span className="absolute left-3 top-3 flex gap-1.5">
         {b.avgRating !== null ? (
@@ -830,10 +1028,16 @@ function BenchCard({ bench: b, onSelect }: { bench: BenchSummary; onSelect: (id:
             новая
           </span>
         )}
-        <span className="inline-flex items-center gap-1 rounded-full bg-ink/50 px-2.5 py-1 text-xs font-bold text-white backdrop-blur-md">
+        <span className="inline-flex items-center gap-1 rounded-full bg-night/50 px-2.5 py-1 text-xs font-bold text-white backdrop-blur-md">
           <MessageSquare size={12} />
           {b.reviewCount}
         </span>
+        {distance !== undefined && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-night/50 px-2.5 py-1 text-xs font-bold text-white backdrop-blur-md">
+            <Navigation size={11} />
+            {formatDistance(distance)}
+          </span>
+        )}
       </span>
 
       <span className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 p-4">
@@ -878,6 +1082,7 @@ function AddBenchForm({
   const [reviewText, setReviewText] = useState("");
   const [benchPhoto, setBenchPhoto] = useState<File | null>(null);
   const [viewPhoto, setViewPhoto] = useState<File | null>(null);
+  const [tags, setTags] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
@@ -903,6 +1108,7 @@ function AddBenchForm({
       if (reviewText.trim()) formData.append("reviewText", reviewText);
       formData.append("benchPhoto", benchPhoto);
       formData.append("viewPhoto", viewPhoto);
+      for (const t of tags) formData.append("tags", t);
 
       const res = await fetch("/api/benches", {
         method: "POST",
@@ -961,10 +1167,16 @@ function AddBenchForm({
               rows={3}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Вид, тень, спинка, рядом ли урна…"
+              placeholder="Чем запомнилось это место?"
               className={`${inputClass} resize-none`}
             />
           </Field>
+          <div>
+            <span className="mb-1.5 block pl-1 text-xs font-bold text-ink-soft">Удобства</span>
+            <div className="flex flex-wrap gap-1.5">
+              <TagChips value={tags} onChange={setTags} />
+            </div>
+          </div>
           <Field label="Ваше имя">
             <input
               maxLength={80}
@@ -1039,7 +1251,7 @@ function Section({
   return (
     <section className="space-y-3">
       <div className="flex items-center gap-2.5">
-        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-ink font-display text-xs font-bold text-white">
+        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-ink font-display text-xs font-bold text-paper">
           {n}
         </span>
         <h3 className="font-display text-sm font-bold text-ink">{title}</h3>
@@ -1070,6 +1282,8 @@ function BenchDetailsPanel({
   onDelete,
   onReviewAdded,
   onError,
+  onShare,
+  distance,
   isAdmin,
   adminKey,
 }: {
@@ -1081,6 +1295,8 @@ function BenchDetailsPanel({
   onDelete: () => void;
   onReviewAdded: () => Promise<void>;
   onError: (msg: string) => void;
+  onShare: (bench: { id: number; title: string }) => void;
+  distance?: number;
   isAdmin: boolean;
   adminKey: string;
 }) {
@@ -1101,17 +1317,56 @@ function BenchDetailsPanel({
   const [editing, setEditing] = useState(false);
   const [editTitle, setEditTitle] = useState("");
   const [editDesc, setEditDesc] = useState("");
+  const [editTags, setEditTags] = useState<string[]>([]);
   const [editSaving, setEditSaving] = useState(false);
   const [confirmDelReview, setConfirmDelReview] = useState<number | null>(null);
 
-  useEffect(() => {
-    setEditing(false);
-    setConfirmDelReview(null);
-  }, [details?.id]);
+  // «Полезно»: какие рецензии этот браузер уже отметил + свежие счётчики
+  const [likedRaw, setLikedRaw] = useStoredString("bench-liked-reviews");
+  const liked = useMemo(() => {
+    try {
+      const arr = JSON.parse(likedRaw || "[]");
+      return new Set<number>(Array.isArray(arr) ? arr : []);
+    } catch {
+      return new Set<number>();
+    }
+  }, [likedRaw]);
+  const [likeCounts, setLikeCounts] = useState<Record<number, number>>({});
+  const [reviewSort, setReviewSort] = useState<"new" | "useful">("new");
+
+  const toggleLike = async (reviewId: number) => {
+    const wasLiked = liked.has(reviewId);
+    try {
+      const res = await fetch(`/api/reviews/${reviewId}/like`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ delta: wasLiked ? -1 : 1 }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Ошибка");
+      setLikeCounts((prev) => ({ ...prev, [reviewId]: data.likes }));
+      const next = new Set(liked);
+      if (wasLiked) next.delete(reviewId);
+      else next.add(reviewId);
+      setLikedRaw(next.size ? JSON.stringify([...next]) : "");
+    } catch (err) {
+      onError(err instanceof Error ? err.message : "Не удалось отметить рецензию");
+    }
+  };
+
+  const sortedReviews = useMemo(() => {
+    const list = [...(details?.reviews ?? [])];
+    if (reviewSort === "useful") {
+      const n = (r: { id: number; likes: number }) => likeCounts[r.id] ?? r.likes ?? 0;
+      list.sort((a, b) => n(b) - n(a));
+    }
+    return list;
+  }, [details, reviewSort, likeCounts]);
 
   const startEdit = () => {
     setEditTitle(details?.title ?? "");
     setEditDesc(details?.description ?? "");
+    setEditTags(details?.tags ?? []);
     setEditing(true);
   };
 
@@ -1125,7 +1380,7 @@ function BenchDetailsPanel({
           "Content-Type": "application/json",
           "x-admin-key": adminKey,
         },
-        body: JSON.stringify({ title: editTitle, description: editDesc }),
+        body: JSON.stringify({ title: editTitle, description: editDesc, tags: editTags }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Ошибка");
@@ -1194,21 +1449,33 @@ function BenchDetailsPanel({
       <button onClick={onBack} aria-label="Все скамейки" title="Все скамейки" className={floatingBtn}>
         <ArrowLeft size={19} />
       </button>
-      {isAdmin && (
-        <div className="flex items-center gap-1.5">
-          <button onClick={startEdit} aria-label="Изменить" title="Изменить" className={floatingBtn}>
-            <Pencil size={17} />
-          </button>
+      <div className="flex items-center gap-1.5">
+        {details && (
           <button
-            onClick={onDelete}
-            aria-label="Удалить"
-            title="Удалить"
-            className={`${floatingBtn} !text-[#e5484d]`}
+            onClick={() => onShare(details)}
+            aria-label="Поделиться"
+            title="Поделиться ссылкой"
+            className={floatingBtn}
           >
-            <Trash2 size={17} />
+            <Share2 size={17} />
           </button>
-        </div>
-      )}
+        )}
+        {isAdmin && (
+          <>
+            <button onClick={startEdit} aria-label="Изменить" title="Изменить" className={floatingBtn}>
+              <Pencil size={17} />
+            </button>
+            <button
+              onClick={onDelete}
+              aria-label="Удалить"
+              title="Удалить"
+              className={`${floatingBtn} !text-[#e5484d]`}
+            >
+              <Trash2 size={17} />
+            </button>
+          </>
+        )}
+      </div>
     </div>
   );
 
@@ -1242,8 +1509,8 @@ function BenchDetailsPanel({
                 title="Открыть фото"
               >
                 <img src={hero.src} alt={details.title} className="h-full w-full object-cover" />
-                <span className="absolute inset-0 bg-gradient-to-t from-ink/70 via-transparent to-ink/30" />
-                <span className="absolute bottom-4 left-4 rounded-full bg-ink/45 px-3 py-1 text-[11px] font-semibold text-white backdrop-blur-md">
+                <span className="absolute inset-0 bg-gradient-to-t from-night/70 via-transparent to-night/30" />
+                <span className="absolute bottom-4 left-4 rounded-full bg-night/45 px-3 py-1 text-[11px] font-semibold text-white backdrop-blur-md">
                   {hero.caption}
                 </span>
               </button>
@@ -1281,6 +1548,9 @@ function BenchDetailsPanel({
                   placeholder="Описание (можно оставить пустым)"
                   className={`${inputClass} resize-none`}
                 />
+                <div className="flex flex-wrap gap-1.5">
+                  <TagChips value={editTags} onChange={setEditTags} size="sm" />
+                </div>
                 <div className="flex gap-2">
                   <button onClick={() => setEditing(false)} className={`${ghostBtn} py-2.5`}>
                     Отмена
@@ -1304,6 +1574,19 @@ function BenchDetailsPanel({
                     {details.description}
                   </p>
                 )}
+                {(details.tags ?? []).length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {details.tags.map((t) => (
+                      <span
+                        key={t}
+                        className="inline-flex items-center gap-1 rounded-full bg-moss/30 px-3 py-1.5 text-xs font-bold text-forest-light"
+                      >
+                        <Check size={12} strokeWidth={3} />
+                        {tagLabel(t)}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </>
             )}
 
@@ -1317,6 +1600,11 @@ function BenchDetailsPanel({
               <span className="inline-flex items-center gap-1.5 rounded-full bg-sand/70 px-3 py-1.5 font-mono">
                 <MapPin size={13} /> {details.lat.toFixed(4)}, {details.lng.toFixed(4)}
               </span>
+              {distance !== undefined && (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-sand/70 px-3 py-1.5">
+                  <Navigation size={12} /> {formatDistance(distance)} от вас
+                </span>
+              )}
             </div>
 
             {/* Сводка оценок */}
@@ -1387,9 +1675,31 @@ function BenchDetailsPanel({
 
             {/* Рецензии */}
             <div className="mt-6">
-              <div className="mb-3 flex items-baseline gap-2">
-                <h3 className="font-display text-lg font-bold text-ink">Рецензии</h3>
-                <span className="text-sm font-bold text-ink-soft">{details.reviewCount}</span>
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <div className="flex items-baseline gap-2">
+                  <h3 className="font-display text-lg font-bold text-ink">Рецензии</h3>
+                  <span className="text-sm font-bold text-ink-soft">{details.reviewCount}</span>
+                </div>
+                {details.reviews.length > 1 && (
+                  <div className="flex gap-0.5 rounded-full bg-sand/70 p-0.5 text-[11px] font-bold">
+                    {(
+                      [
+                        ["new", "Новые"],
+                        ["useful", "Полезные"],
+                      ] as const
+                    ).map(([key, label]) => (
+                      <button
+                        key={key}
+                        onClick={() => setReviewSort(key)}
+                        className={`rounded-full px-2.5 py-1 transition ${
+                          reviewSort === key ? "bg-paper text-ink shadow-sm" : "text-ink-soft"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               {details.reviews.length === 0 ? (
                 <div className="rounded-[22px] border-2 border-dashed border-sand-dark p-6 text-center text-sm font-medium text-ink-soft">
@@ -1397,8 +1707,10 @@ function BenchDetailsPanel({
                 </div>
               ) : (
                 <ul className="space-y-2.5">
-                  {details.reviews.map((r) => {
+                  {sortedReviews.map((r) => {
                     const color = AVATAR_COLORS[r.author.charCodeAt(0) % AVATAR_COLORS.length];
+                    const likes = likeCounts[r.id] ?? r.likes ?? 0;
+                    const isLiked = liked.has(r.id);
                     return (
                       <li key={r.id} className="rounded-[22px] bg-paper p-4 ring-1 ring-sand">
                         <div className="flex items-center gap-3">
@@ -1443,6 +1755,20 @@ function BenchDetailsPanel({
                         <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-ink">
                           {r.text}
                         </p>
+                        <div className="mt-3 flex justify-end">
+                          <button
+                            onClick={() => toggleLike(r.id)}
+                            aria-pressed={isLiked}
+                            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition active:scale-95 ${
+                              isLiked
+                                ? "bg-tangerine/15 text-tangerine-dark"
+                                : "bg-sand/60 text-ink-soft hover:text-ink"
+                            }`}
+                          >
+                            <Heart size={13} fill={isLiked ? "currentColor" : "none"} />
+                            Полезно{likes > 0 ? ` · ${likes}` : ""}
+                          </button>
+                        </div>
                       </li>
                     );
                   })}

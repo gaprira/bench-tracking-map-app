@@ -48,7 +48,7 @@ export async function POST(request: Request, { params }: Ctx) {
 
   const [created] = await db
     .insert(reviews)
-    .values({ benchId, author, rating, text })
+    .values({ benchId, author, rating, text, likes: 0 })
     .returning();
 
   return Response.json(

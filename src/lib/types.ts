@@ -10,6 +10,7 @@ export type BenchSummary = {
   avgRating: number | null;
   benchPhoto: string | null;
   viewPhoto: string | null;
+  tags: string[];
 };
 
 export type ReviewDto = {
@@ -18,6 +19,7 @@ export type ReviewDto = {
   author: string;
   rating: number;
   text: string;
+  likes: number;
   createdAt: string;
 };
 

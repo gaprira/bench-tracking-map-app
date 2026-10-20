@@ -2,6 +2,7 @@ import { db } from "@/db";
 import { benches, reviews } from "@/db/schema";
 import { desc, eq } from "drizzle-orm";
 import { checkAdmin, adminDenied } from "@/lib/admin";
+import { normalizeTags } from "@/lib/tags";
 
 export const dynamic = "force-dynamic";
 
@@ -33,11 +34,13 @@ export async function GET(_request: Request, { params }: Ctx) {
 
   return Response.json({
     ...bench,
+    tags: bench.tags ?? [],
     createdAt: bench.createdAt.toISOString(),
     reviewCount,
     avgRating,
     reviews: benchReviews.map((r: any) => ({
       ...r,
+      likes: r.likes ?? 0,
       createdAt: r.createdAt.toISOString(),
     })),
   });
@@ -80,7 +83,12 @@ export async function PATCH(request: Request, { params }: Ctx) {
 
   const updated = await db
     .update(benches)
-    .set({ title, description: description || null })
+    .set({
+      title,
+      description: description || null,
+      // теги меняем, только если их прислали
+      ...(Array.isArray(data.tags) ? { tags: normalizeTags(data.tags) } : {}),
+    })
     .where(eq(benches.id, benchId))
     .returning();
 

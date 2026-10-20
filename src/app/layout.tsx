@@ -6,7 +6,13 @@ import "@fontsource-variable/unbounded";
 import type { ReactNode } from "react";
 import "./globals.css";
 
+// Абсолютные адреса для превью ссылок (og:image и т.п.)
+const siteUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
+  ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+  : "http://localhost:3000";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
   title: "Скамейки — карта и рецензии",
   description:
     "Отмечайте скамейки на карте, оценивайте их и делитесь впечатлениями.",
@@ -19,10 +25,22 @@ export const metadata: Metadata = {
     statusBarStyle: "default",
   },
   formatDetection: { telephone: false },
+  openGraph: {
+    title: "Скамейки — карта и рецензии",
+    description: "Отмечайте скамейки на карте, оценивайте их и делитесь впечатлениями.",
+    siteName: "Скамейки",
+    locale: "ru_RU",
+    type: "website",
+    images: [{ url: "/icon-512.png", width: 512, height: 512, alt: "Скамейки" }],
+  },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#f4f0e6",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f4f0e6" },
+    { media: "(prefers-color-scheme: dark)", color: "#111713" },
+  ],
+  colorScheme: "light dark",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
