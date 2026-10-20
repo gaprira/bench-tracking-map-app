@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   AlertCircle,
   ArrowLeft,
@@ -117,6 +117,9 @@ const primaryBtn =
 
 const ghostBtn =
   "inline-flex items-center justify-center gap-2 rounded-full border border-sand bg-paper px-5 py-3 text-sm font-bold text-ink transition hover:bg-cream active:scale-[0.97] disabled:opacity-50";
+
+// Сколько пикселей свёрнутой шторки видно над низом экрана
+const SHEET_PEEK = 140;
 
 const iconBtn =
   "flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition active:scale-90";
@@ -416,6 +419,52 @@ export default function BenchApp({ initialBenchId }: { initialBenchId?: number }
 
   const sheetOpen = mobileTab === "list";
 
+  // Смахивание шторки пальцем (только телефон). Тянуть можно за элементы с
+  // data-sheet-drag; захват указателя — лишь после сдвига на 6px, чтобы обычные
+  // нажатия на кнопки и чипы в шапке продолжали работать.
+  const sheetRef = useRef<HTMLElement>(null);
+  const drag = useRef<{ startY: number; startT: number; moved: boolean; id: number } | null>(
+    null,
+  );
+  const [dragDy, setDragDy] = useState(0);
+  const [dragging, setDragging] = useState(false);
+
+  const onSheetPointerDown = (e: React.PointerEvent) => {
+    if (window.innerWidth >= 768) return;
+    const target = e.target as HTMLElement;
+    if (!target.closest("[data-sheet-drag]") || target.closest("input, textarea")) return;
+    drag.current = { startY: e.clientY, startT: e.timeStamp, moved: false, id: e.pointerId };
+  };
+  const onSheetPointerMove = (e: React.PointerEvent) => {
+    const d = drag.current;
+    if (!d || d.id !== e.pointerId) return;
+    const dy = e.clientY - d.startY;
+    if (!d.moved) {
+      if (Math.abs(dy) < 6) return;
+      d.moved = true;
+      try {
+        sheetRef.current?.setPointerCapture(e.pointerId);
+      } catch {
+        // указатель уже отпущен — жест доведём и без захвата
+      }
+      setDragging(true);
+    }
+    const range = (sheetRef.current?.offsetHeight ?? 600) - SHEET_PEEK;
+    setDragDy(sheetOpen ? Math.min(Math.max(dy, 0), range) : Math.max(Math.min(dy, 0), -range));
+  };
+  const onSheetPointerEnd = (e: React.PointerEvent) => {
+    const d = drag.current;
+    if (!d || d.id !== e.pointerId) return;
+    drag.current = null;
+    if (!d.moved) return;
+    const dy = e.clientY - d.startY;
+    const velocity = dy / Math.max(1, e.timeStamp - d.startT); // px/мс
+    if (sheetOpen && (dy > 90 || velocity > 0.5)) setMobileTab("map");
+    if (!sheetOpen && (dy < -60 || velocity < -0.5)) setMobileTab("list");
+    setDragging(false);
+    setDragDy(0);
+  };
+
   return (
     <div className="relative h-dvh overflow-hidden bg-cream">
       {/* Карта на весь экран */}
@@ -518,14 +567,26 @@ export default function BenchApp({ initialBenchId }: { initialBenchId?: number }
 
       {/* Панель: шторка снизу на телефоне, карточка слева на десктопе */}
       <aside
-        className={`absolute inset-x-0 bottom-0 z-40 flex h-[86dvh] flex-col overflow-hidden rounded-t-[30px] bg-cream shadow-[0_-12px_40px_-12px_rgb(23_34_27/0.4)] transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] md:inset-x-auto md:bottom-4 md:left-4 md:top-[84px] md:h-auto md:w-[420px] md:translate-y-0 md:rounded-[30px] md:shadow-[0_20px_60px_-20px_rgb(23_34_27/0.5)] ${
-          sheetOpen ? "translate-y-0" : "translate-y-[calc(100%-140px)]"
+        ref={sheetRef}
+        onPointerDown={onSheetPointerDown}
+        onPointerMove={onSheetPointerMove}
+        onPointerUp={onSheetPointerEnd}
+        onPointerCancel={onSheetPointerEnd}
+        style={
+          {
+            "--sheet-base": sheetOpen ? "0px" : `calc(100% - ${SHEET_PEEK}px)`,
+            "--sheet-drag": `${dragDy}px`,
+          } as React.CSSProperties
+        }
+        className={`absolute inset-x-0 bottom-0 z-40 flex h-[86dvh] translate-y-[calc(var(--sheet-base)+var(--sheet-drag))] flex-col overflow-hidden rounded-t-[30px] bg-cream shadow-[0_-12px_40px_-12px_rgb(23_34_27/0.4)] md:inset-x-auto md:bottom-4 md:left-4 md:top-[84px] md:h-auto md:w-[420px] md:translate-y-0 md:rounded-[30px] md:shadow-[0_20px_60px_-20px_rgb(23_34_27/0.5)] ${
+          dragging ? "" : "transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]"
         }`}
       >
         <button
+          data-sheet-drag
           onClick={() => setMobileTab(sheetOpen ? "map" : "list")}
           aria-label={sheetOpen ? "Свернуть" : "Развернуть"}
-          className="flex w-full shrink-0 justify-center pb-1 pt-2.5 md:hidden"
+          className="flex w-full shrink-0 touch-none justify-center pb-2 pt-3 md:hidden"
         >
           <span className="h-1.5 w-11 rounded-full bg-sand-dark" />
         </button>
@@ -886,7 +947,7 @@ function BenchList({
   const filtering = Boolean(search.trim()) || tagFilter.length > 0;
   return (
     <>
-      <div className="shrink-0 px-5 pb-3 pt-2 md:pt-6">
+      <div data-sheet-drag className="shrink-0 touch-none px-5 pb-3 pt-1 md:touch-auto md:pt-6">
         <button onClick={onExpand} className="block w-full text-left md:pointer-events-none">
           <h2 className="font-display text-[26px] font-bold leading-[1.05] tracking-tight text-ink">
             Где <span className="text-tangerine">присесть</span>
@@ -936,8 +997,8 @@ function BenchList({
             </button>
           ))}
         </div>
-        {/* Фильтр по удобствам: горизонтальная лента чипов */}
-        <div className="-mx-5 mt-3 flex gap-1.5 overflow-x-auto px-5 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {/* Фильтр по удобствам: чипы переносятся на новую строку */}
+        <div className="mt-3 flex flex-wrap gap-1.5">
           <TagChips value={tagFilter} onChange={onTagFilter} size="sm" />
         </div>
       </div>
@@ -1126,7 +1187,7 @@ function AddBenchForm({
 
   return (
     <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
-      <div className="flex shrink-0 items-center gap-3 px-5 pb-3 pt-2 md:pt-5">
+      <div data-sheet-drag className="flex shrink-0 touch-none items-center gap-3 px-5 pb-3 pt-2 md:touch-auto md:pt-5">
         <button
           type="button"
           onClick={onCancel}
