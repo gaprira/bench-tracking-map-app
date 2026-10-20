@@ -11,6 +11,8 @@ export type BenchSummary = {
   benchPhoto: string | null;
   viewPhoto: string | null;
   tags: string[];
+  status?: "approved" | "pending";
+  photoScore?: number | null;
 };
 
 export type ReviewDto = {

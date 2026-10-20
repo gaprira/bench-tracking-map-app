@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-export async function GET(_request: Request, { params }: Ctx) {
+export async function GET(request: Request, { params }: Ctx) {
   const { id } = await params;
   const benchId = Number(id);
   if (!Number.isInteger(benchId)) {
@@ -16,7 +16,8 @@ export async function GET(_request: Request, { params }: Ctx) {
   }
 
   const [bench] = await db.select().from(benches).where(eq(benches.id, benchId));
-  if (!bench) {
+  // Скамейку «на проверке» видит только админ
+  if (!bench || ((bench.status ?? "approved") !== "approved" && !checkAdmin(request))) {
     return Response.json({ error: "Скамейка не найдена" }, { status: 404 });
   }
 
@@ -34,6 +35,7 @@ export async function GET(_request: Request, { params }: Ctx) {
 
   return Response.json({
     ...bench,
+    status: bench.status ?? "approved",
     tags: bench.tags ?? [],
     createdAt: bench.createdAt.toISOString(),
     reviewCount,
@@ -64,11 +66,13 @@ export async function PATCH(request: Request, { params }: Ctx) {
   }
   const data = body as Record<string, unknown>;
 
+  // Одобрение («status») можно прислать отдельно, без названия
+  const onlyStatus = data.title === undefined && typeof data.status === "string";
   const title = typeof data.title === "string" ? data.title.trim() : "";
   const description =
     typeof data.description === "string" ? data.description.trim() : "";
 
-  if (!title || title.length > 120) {
+  if (!onlyStatus && (!title || title.length > 120)) {
     return Response.json(
       { error: "Название обязательно (до 120 символов)" },
       { status: 400 },
@@ -84,10 +88,11 @@ export async function PATCH(request: Request, { params }: Ctx) {
   const updated = await db
     .update(benches)
     .set({
-      title,
-      description: description || null,
+      ...(onlyStatus ? {} : { title, description: description || null }),
       // теги меняем, только если их прислали
       ...(Array.isArray(data.tags) ? { tags: normalizeTags(data.tags) } : {}),
+      // одобрение скамейки «на проверке»
+      ...(data.status === "approved" || data.status === "pending" ? { status: data.status } : {}),
     })
     .where(eq(benches.id, benchId))
     .returning();

@@ -1,0 +1,1251 @@
+<!doctype html>
+<html lang="ru" data-resolution="portrait">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      /* Фирменные шрифты сайта (локальные файлы, без сети) */
+      @font-face {
+        font-family: "Unbounded";
+        src: url("assets/fonts/unbounded-cyrillic-wght-normal.woff2") format("woff2");
+        font-weight: 200 900;
+        unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+      }
+      @font-face {
+        font-family: "Unbounded";
+        src: url("assets/fonts/unbounded-latin-wght-normal.woff2") format("woff2");
+        font-weight: 200 900;
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+          U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      @font-face {
+        font-family: "Manrope";
+        src: url("assets/fonts/manrope-cyrillic-wght-normal.woff2") format("woff2");
+        font-weight: 200 800;
+        unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+      }
+      @font-face {
+        font-family: "Manrope";
+        src: url("assets/fonts/manrope-latin-wght-normal.woff2") format("woff2");
+        font-weight: 200 800;
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+          U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+
+      :root {
+        --cream: #f4f0e6;
+        --paper: #fffcf5;
+        --sand: #e8e1d1;
+        --sand-dark: #d6cdb8;
+        --ink: #17221b;
+        --ink-soft: #5b665e;
+        --forest: #1d3a2a;
+        --forest-light: #2e5a41;
+        --moss: #9cc27a;
+        --tangerine: #ff6a2b;
+        --sun: #ffb020;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 1080px;
+        height: 1920px;
+        overflow: hidden;
+        background: var(--cream);
+      }
+      #root {
+        position: relative;
+        width: 1080px;
+        height: 1920px;
+        overflow: hidden;
+        font-family: "Manrope", system-ui, sans-serif;
+        color: var(--ink);
+        background: var(--cream);
+      }
+      .clip {
+        position: absolute;
+        inset: 0;
+      }
+      .display {
+        font-family: "Unbounded", "Manrope", sans-serif;
+      }
+
+      /* ---------- фон ---------- */
+      #bg {
+        background:
+          radial-gradient(900px 700px at 80% 12%, rgb(255 106 43 / 0.13), transparent 70%),
+          radial-gradient(1000px 900px at 10% 95%, rgb(156 194 122 / 0.28), transparent 70%),
+          var(--cream);
+      }
+      .orb {
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(2px);
+      }
+      #orbA {
+        width: 520px;
+        height: 520px;
+        right: -180px;
+        top: 240px;
+        background: radial-gradient(circle at 35% 35%, rgb(255 176 32 / 0.35), rgb(255 106 43 / 0) 70%);
+      }
+      #orbB {
+        width: 640px;
+        height: 640px;
+        left: -260px;
+        bottom: 120px;
+        background: radial-gradient(circle at 60% 40%, rgb(46 90 65 / 0.22), rgb(46 90 65 / 0) 70%);
+      }
+      #grain {
+        pointer-events: none;
+        z-index: 50;
+        opacity: 0.16;
+        mix-blend-mode: multiply;
+        background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.1  0 0 0 0 0.12  0 0 0 0 0.1  0 0 0 .55 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+      }
+
+      /* ---------- интро ---------- */
+      #intro {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 10;
+      }
+      #introGroup {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      .disc {
+        width: 260px;
+        height: 260px;
+        border-radius: 50%;
+        background: var(--forest);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 40px 80px -30px rgb(23 34 27 / 0.55);
+      }
+      .disc svg {
+        width: 170px;
+        height: 170px;
+        color: var(--moss);
+      }
+      .bar {
+        transform-box: fill-box;
+        transform-origin: left center;
+      }
+      .wordmark {
+        margin-top: 64px;
+        font-family: "Unbounded", sans-serif;
+        font-weight: 700;
+        font-size: 128px;
+        letter-spacing: -0.04em;
+        line-height: 1;
+        display: flex;
+        overflow: hidden;
+        padding: 0 8px 14px;
+      }
+      .wordmark span {
+        display: inline-block;
+      }
+      #tagline {
+        margin-top: 22px;
+        font-size: 40px;
+        font-weight: 600;
+        color: var(--ink-soft);
+      }
+
+      /* ---------- подписи ---------- */
+      #captions {
+        z-index: 20;
+        pointer-events: none;
+      }
+      .caption {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 150px;
+        text-align: center;
+        font-family: "Unbounded", sans-serif;
+        font-weight: 700;
+        font-size: 78px;
+        line-height: 1.04;
+        letter-spacing: -0.035em;
+      }
+      .caption .line {
+        display: block;
+        overflow: hidden;
+        padding-bottom: 8px;
+      }
+      .caption .w {
+        display: inline-block;
+      }
+      .accent {
+        color: var(--tangerine);
+      }
+
+      /* ---------- телефон ---------- */
+      #phoneScene {
+        z-index: 15;
+      }
+      #phone {
+        position: absolute;
+        left: 220px;
+        top: 470px;
+        width: 640px;
+        height: 1360px;
+        border-radius: 96px;
+        background: #0f1611;
+        padding: 18px;
+        box-shadow:
+          0 0 0 2px #2b352e inset,
+          0 80px 140px -40px rgb(23 34 27 / 0.55),
+          0 30px 60px -30px rgb(23 34 27 / 0.45);
+      }
+      #screen {
+        position: relative;
+        width: 604px;
+        height: 1324px;
+        border-radius: 78px;
+        overflow: hidden;
+        background: #e9e5da;
+      }
+      /* Экран свёрстан в «точках» 375×822 и масштабирован под телефон */
+      #ui {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 375px;
+        height: 822px;
+        transform: scale(1.6107);
+        transform-origin: 0 0;
+      }
+      #world {
+        position: absolute;
+        inset: 0;
+        transform-origin: 130px 430px;
+      }
+      .pin {
+        position: absolute;
+        transform: translate(-50%, -100%);
+      }
+      .pin-in {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 6px 10px 6px 7px;
+        border-radius: 999px;
+        background: var(--paper);
+        font-weight: 800;
+        font-size: 13px;
+        line-height: 1;
+        box-shadow:
+          0 0 0 1px rgb(23 34 27 / 0.08),
+          0 8px 18px -6px rgb(23 34 27 / 0.45);
+        position: relative;
+        isolation: isolate;
+      }
+      .pin-in::after,
+      #pinActive::after {
+        content: "";
+        position: absolute;
+        left: 50%;
+        bottom: -4px;
+        width: 10px;
+        height: 10px;
+        transform: translateX(-50%) rotate(45deg);
+        background: inherit;
+        border-radius: 2px;
+        z-index: -1;
+      }
+      .dot {
+        width: 15px;
+        height: 15px;
+        border-radius: 50%;
+        box-shadow: inset 0 0 0 2px rgb(255 255 255 / 0.55);
+      }
+      #pinActive {
+        position: absolute;
+        inset: 0;
+        border-radius: 999px;
+        background: var(--forest);
+        color: #fff;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 6px 10px 6px 7px;
+        opacity: 0;
+        isolation: isolate;
+      }
+      #cluster {
+        position: absolute;
+        left: 195px;
+        top: 380px;
+        width: 58px;
+        height: 58px;
+        margin: -29px 0 0 -29px;
+        border-radius: 50%;
+        background: var(--forest);
+        border: 3px solid var(--paper);
+        color: #fff;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 10px 22px -8px rgb(23 34 27 / 0.6);
+      }
+      #cluster b {
+        font-family: "Unbounded", sans-serif;
+        font-size: 17px;
+      }
+      #cluster span {
+        font-size: 9px;
+        font-weight: 800;
+        color: var(--moss);
+        margin-top: 2px;
+      }
+      #user {
+        position: absolute;
+        left: 190px;
+        top: 610px;
+        width: 22px;
+        height: 22px;
+        margin: -11px 0 0 -11px;
+      }
+      #user i,
+      #user b {
+        position: absolute;
+        border-radius: 50%;
+        background: #3b82f6;
+      }
+      #user i {
+        inset: 0;
+        opacity: 0.4;
+      }
+      #user b {
+        inset: 3px;
+        border: 3px solid #fff;
+        box-shadow: 0 2px 8px rgb(59 130 246 / 0.6);
+      }
+
+      /* шапка приложения */
+      .pill {
+        position: absolute;
+        top: 14px;
+        height: 46px;
+        border-radius: 999px;
+        background: rgb(255 252 245 / 0.94);
+        box-shadow:
+          0 10px 24px -12px rgb(23 34 27 / 0.5),
+          0 0 0 1px rgb(23 34 27 / 0.05);
+        display: flex;
+        align-items: center;
+      }
+      #brandPill {
+        left: 12px;
+        padding: 4px 14px 4px 4px;
+        gap: 9px;
+      }
+      #brandPill .logo {
+        width: 38px;
+        height: 38px;
+        border-radius: 50%;
+        background: var(--forest);
+        color: var(--moss);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      #brandPill .name {
+        font-family: "Unbounded", sans-serif;
+        font-weight: 700;
+        font-size: 15px;
+        letter-spacing: -0.02em;
+      }
+      #actionsPill {
+        right: 12px;
+        padding: 4px;
+        gap: 4px;
+      }
+      .ib {
+        width: 38px;
+        height: 38px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--ink);
+      }
+      .ib.add {
+        background: var(--tangerine);
+        color: #fff;
+        box-shadow: 0 6px 14px -4px rgb(255 106 43 / 0.6);
+      }
+
+      /* шторка */
+      #sheet {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 96px;
+        height: 760px;
+        border-radius: 28px 28px 0 0;
+        background: var(--cream);
+        box-shadow: 0 -14px 34px -14px rgb(23 34 27 / 0.45);
+        overflow: hidden;
+      }
+      .handle {
+        position: absolute;
+        left: 50%;
+        top: 9px;
+        width: 40px;
+        height: 5px;
+        margin-left: -20px;
+        border-radius: 99px;
+        background: var(--sand-dark);
+        z-index: 3;
+      }
+      #peek {
+        position: absolute;
+        left: 20px;
+        right: 20px;
+        top: 26px;
+      }
+      #peek h3 {
+        font-family: "Unbounded", sans-serif;
+        font-size: 23px;
+        line-height: 1.05;
+        letter-spacing: -0.03em;
+      }
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 12px;
+      }
+      .chip {
+        padding: 6px 11px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 800;
+        background: var(--paper);
+        border: 1px solid var(--sand);
+        color: var(--ink-soft);
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .chip.on {
+        background: var(--forest);
+        border-color: var(--forest);
+        color: var(--moss);
+      }
+
+      #details {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        opacity: 0;
+      }
+      #sheetBarBg {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 0;
+        height: 96px;
+        background: linear-gradient(var(--cream) 70%, rgb(244 240 230 / 0));
+        z-index: 3;
+        opacity: 0;
+      }
+      #sheetBar {
+        position: absolute;
+        left: 12px;
+        right: 12px;
+        top: 22px;
+        display: flex;
+        justify-content: space-between;
+        z-index: 4;
+      }
+      .fb {
+        width: 38px;
+        height: 38px;
+        border-radius: 50%;
+        background: rgb(255 252 245 / 0.92);
+        box-shadow: 0 6px 16px -6px rgb(23 34 27 / 0.45);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--ink);
+      }
+      #scroll {
+        position: absolute;
+        left: 12px;
+        right: 12px;
+        top: 16px;
+      }
+      #hero {
+        position: relative;
+        height: 214px;
+        border-radius: 22px;
+        overflow: hidden;
+      }
+      #hero svg {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+      }
+      .layer {
+        transform-box: view-box;
+      }
+      #title {
+        margin: 16px 8px 0;
+        font-family: "Unbounded", sans-serif;
+        font-weight: 700;
+        font-size: 24px;
+        letter-spacing: -0.03em;
+        line-height: 1.08;
+      }
+      #meta {
+        margin: 6px 8px 0;
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--ink-soft);
+      }
+      #tags {
+        margin: 10px 8px 0;
+      }
+      #tags .chip {
+        background: rgb(156 194 122 / 0.3);
+        border-color: transparent;
+        color: var(--forest-light);
+      }
+      #rating {
+        margin: 14px 0 0;
+        border-radius: 22px;
+        background: var(--forest);
+        color: #fff;
+        padding: 16px 18px;
+        display: flex;
+        gap: 18px;
+        align-items: center;
+      }
+      #score {
+        font-family: "Unbounded", sans-serif;
+        font-weight: 700;
+        font-size: 46px;
+        line-height: 1;
+        color: var(--moss);
+      }
+      .stars {
+        display: flex;
+        gap: 2px;
+        margin-top: 8px;
+      }
+      .stars svg {
+        width: 14px;
+        height: 14px;
+        color: var(--sun);
+      }
+      .bars {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .barRow {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 10px;
+        font-weight: 800;
+        color: rgb(255 255 255 / 0.7);
+      }
+      .track {
+        flex: 1;
+        height: 7px;
+        border-radius: 9px;
+        background: rgb(255 255 255 / 0.1);
+        overflow: hidden;
+      }
+      .fill {
+        height: 100%;
+        border-radius: 9px;
+        background: var(--sun);
+        transform-origin: left center;
+      }
+      #review,
+      #review2 {
+        margin-top: 12px;
+        border-radius: 22px;
+        background: var(--paper);
+        box-shadow: 0 0 0 1px var(--sand);
+        padding: 16px;
+      }
+      .rhead {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .avatar {
+        width: 38px;
+        height: 38px;
+        border-radius: 50%;
+        background: var(--tangerine);
+        color: #fff;
+        font-family: "Unbounded", sans-serif;
+        font-weight: 700;
+        font-size: 15px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .rname {
+        font-size: 14px;
+        font-weight: 800;
+      }
+      .rtext {
+        margin-top: 10px;
+        font-size: 14px;
+        line-height: 1.45;
+      }
+      .likeRow {
+        margin-top: 12px;
+        display: flex;
+        justify-content: flex-end;
+      }
+      #like {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 12px;
+        border-radius: 999px;
+        background: var(--sand);
+        font-size: 12px;
+        font-weight: 800;
+        color: var(--ink-soft);
+      }
+      #likeOn {
+        position: absolute;
+        inset: 0;
+        border-radius: 999px;
+        background: #ffe1d3;
+        opacity: 0;
+      }
+      #heart {
+        position: relative;
+        width: 15px;
+        height: 15px;
+      }
+      #heart svg {
+        position: absolute;
+        inset: 0;
+        width: 15px;
+        height: 15px;
+      }
+      #heartFull {
+        color: #e85513;
+        opacity: 0;
+      }
+      .count {
+        position: relative;
+        display: inline-block;
+        width: 16px;
+        height: 14px;
+        overflow: hidden;
+      }
+      .count b {
+        position: absolute;
+        left: 0;
+        top: 0;
+      }
+      #c12 {
+        color: #e85513;
+      }
+      .spark {
+        position: absolute;
+        left: 18px;
+        top: 15px;
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: var(--tangerine);
+        opacity: 0;
+      }
+
+      #toast {
+        position: absolute;
+        left: 50%;
+        top: 68px;
+        transform: translateX(-50%);
+        white-space: nowrap;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 16px;
+        border-radius: 999px;
+        background: var(--forest);
+        color: #fff;
+        font-size: 13px;
+        font-weight: 700;
+        box-shadow: 0 14px 30px -10px rgb(23 34 27 / 0.6);
+        opacity: 0;
+        z-index: 9;
+      }
+      #toast svg {
+        color: var(--moss);
+      }
+
+      .ripple {
+        position: absolute;
+        width: 46px;
+        height: 46px;
+        margin: -23px 0 0 -23px;
+        border-radius: 50%;
+        background: rgb(255 255 255 / 0.55);
+        border: 2px solid rgb(255 255 255 / 0.9);
+        opacity: 0;
+        z-index: 8;
+      }
+
+      /* ---------- финал ---------- */
+      #outro {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 30;
+      }
+      #outro .disc {
+        width: 220px;
+        height: 220px;
+      }
+      #outro .disc svg {
+        width: 144px;
+        height: 144px;
+      }
+      #outro .wordmark {
+        font-size: 112px;
+        margin-top: 52px;
+      }
+      #url {
+        margin-top: 26px;
+        font-size: 40px;
+        font-weight: 700;
+        color: var(--ink-soft);
+        letter-spacing: -0.01em;
+      }
+      #cta {
+        margin-top: 70px;
+        display: inline-flex;
+        align-items: center;
+        gap: 18px;
+        padding: 34px 58px;
+        border-radius: 999px;
+        background: var(--tangerine);
+        color: #fff;
+        font-family: "Unbounded", sans-serif;
+        font-weight: 700;
+        font-size: 44px;
+        letter-spacing: -0.02em;
+        box-shadow: 0 30px 60px -20px rgb(255 106 43 / 0.65);
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute">
+      <defs>
+        <symbol id="bench" viewBox="0 0 24 24">
+          <rect x="4.6" y="6.2" width="14.8" height="1.9" rx=".95" />
+          <rect x="4.6" y="9.2" width="14.8" height="1.9" rx=".95" />
+          <rect x="6.2" y="6.2" width="1.5" height="8" rx=".5" />
+          <rect x="16.3" y="6.2" width="1.5" height="8" rx=".5" />
+          <rect x="3.6" y="12.6" width="16.8" height="2.2" rx="1" />
+          <rect x="5.4" y="14" width="1.7" height="5" rx=".6" />
+          <rect x="16.9" y="14" width="1.7" height="5" rx=".6" />
+        </symbol>
+        <symbol id="star" viewBox="0 0 24 24">
+          <path
+            fill="currentColor"
+            d="M12 2.5l2.9 6.06 6.6.8-4.87 4.56 1.25 6.58L12 17.3l-5.88 3.2 1.25-6.58L2.5 9.36l6.6-.8L12 2.5z"
+          />
+        </symbol>
+      </defs>
+    </svg>
+
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="10"
+      data-width="1080"
+      data-height="1920"
+    >
+      <!-- Фон -->
+      <div id="bg" class="clip" data-start="0" data-duration="10" data-track-index="0">
+        <div id="orbA" class="orb"></div>
+        <div id="orbB" class="orb"></div>
+      </div>
+
+      <!-- 1. Интро: логотип собирается -->
+      <div id="intro" class="clip" data-start="0" data-duration="2.8" data-track-index="1">
+        <div id="introGroup">
+          <div class="disc" id="introDisc">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <rect class="bar ib1" x="4.6" y="6.2" width="14.8" height="1.9" rx=".95" />
+              <rect class="bar ib2" x="4.6" y="9.2" width="14.8" height="1.9" rx=".95" />
+              <rect class="bar ib3" x="6.2" y="6.2" width="1.5" height="8" rx=".5" />
+              <rect class="bar ib4" x="16.3" y="6.2" width="1.5" height="8" rx=".5" />
+              <rect class="bar ib5" x="3.6" y="12.6" width="16.8" height="2.2" rx="1" />
+              <rect class="bar ib6" x="5.4" y="14" width="1.7" height="5" rx=".6" />
+              <rect class="bar ib7" x="16.9" y="14" width="1.7" height="5" rx=".6" />
+            </svg>
+          </div>
+          <div class="wordmark" id="introWord">
+            <span>с</span><span>к</span><span>а</span><span>м</span><span>е</span><span>й</span><span>к</span><span>и</span>
+          </div>
+          <div id="tagline">карта мест, где хорошо сидится</div>
+        </div>
+      </div>
+
+      <!-- 2–4. Телефон с приложением -->
+      <div id="phoneScene" class="clip" data-start="1.8" data-duration="7.6" data-track-index="2">
+        <div id="phone">
+          <div id="screen">
+            <div id="ui">
+              <!-- Карта (вектор) -->
+              <div id="world">
+                <svg width="375" height="822" viewBox="0 0 375 822">
+                  <rect width="375" height="822" fill="#ebe6d8" />
+                  <!-- кварталы -->
+                  <g fill="#e2dccb">
+                    <rect x="14" y="70" width="110" height="80" rx="6" />
+                    <rect x="150" y="60" width="90" height="110" rx="6" />
+                    <rect x="262" y="78" width="100" height="70" rx="6" />
+                    <rect x="20" y="540" width="120" height="90" rx="6" />
+                    <rect x="270" y="560" width="96" height="120" rx="6" />
+                    <rect x="150" y="690" width="110" height="100" rx="6" />
+                    <rect x="16" y="680" width="110" height="120" rx="6" />
+                  </g>
+                  <!-- парки -->
+                  <g fill="#cfdcb3">
+                    <path d="M40 300c30-40 120-50 150-10s10 110-40 130-140 10-150-40 10-50 40-80z" />
+                    <path d="M250 440c40-20 110 0 115 50s-40 80-90 70-70-100-25-120z" />
+                    <circle cx="300" cy="230" r="38" />
+                  </g>
+                  <!-- река -->
+                  <path
+                    d="M-20 470c60 10 90 60 150 70s110-50 170-40 90 60 110 70"
+                    fill="none"
+                    stroke="#b7d0d3"
+                    stroke-width="28"
+                    stroke-linecap="round"
+                  />
+                  <!-- дороги -->
+                  <g fill="none" stroke="#fffaf0" stroke-linecap="round">
+                    <path d="M0 190h375" stroke-width="10" />
+                    <path d="M138 0v822" stroke-width="9" />
+                    <path d="M0 655c120-20 250 10 375-15" stroke-width="10" />
+                    <path d="M250 0c-10 200 30 420 -10 822" stroke-width="7" />
+                    <path d="M0 400l375 -60" stroke-width="5" />
+                    <path d="M60 822l60-240" stroke-width="5" />
+                  </g>
+                  <g fill="none" stroke="#f6f0e3" stroke-width="3">
+                    <path d="M0 110h375M0 270h375M0 760h375M70 0v822M320 0v822" />
+                  </g>
+                </svg>
+
+                <!-- метки -->
+                <div class="pin" id="p1" style="left: 95px; top: 252px">
+                  <div class="pin-in"><span class="dot" style="background: #8db33a"></span>4.2</div>
+                </div>
+                <div class="pin" id="p2" style="left: 262px; top: 214px">
+                  <div class="pin-in"><span class="dot" style="background: #2f9e5b"></span>4.8</div>
+                </div>
+                <div class="pin" id="p3" style="left: 305px; top: 372px">
+                  <div class="pin-in"><span class="dot" style="background: #8db33a"></span>3.9</div>
+                </div>
+                <div class="pin" id="p5" style="left: 236px; top: 548px">
+                  <div class="pin-in"><span class="dot" style="background: #f2a93b"></span>2.9</div>
+                </div>
+                <div class="pin" id="p4" style="left: 130px; top: 430px">
+                  <div class="pin-in">
+                    <span class="dot" style="background: #2f9e5b"></span>4.9
+                    <div id="pinActive"><span class="dot" style="background: #2f9e5b"></span>4.9</div>
+                  </div>
+                </div>
+                <div id="cluster"><b>5</b><span>★ 4.1</span></div>
+                <div id="user"><i></i><b></b></div>
+              </div>
+
+              <!-- шапка -->
+              <div class="pill" id="brandPill">
+                <div class="logo">
+                  <svg width="24" height="24" fill="currentColor"><use href="#bench" /></svg>
+                </div>
+                <div class="name">скамейки</div>
+              </div>
+              <div class="pill" id="actionsPill">
+                <div class="ib">
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                    <circle cx="12" cy="12" r="7" /><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+                  </svg>
+                </div>
+                <div class="ib">
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
+                    <path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z" />
+                  </svg>
+                </div>
+                <div class="ib add">
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round">
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                </div>
+              </div>
+
+              <!-- шторка -->
+              <div id="sheet">
+                <div class="handle"></div>
+                <div id="peek">
+                  <h3>Где <span class="accent">присесть</span><br />сегодня</h3>
+                  <div class="chips">
+                    <span class="chip">Тень</span><span class="chip">Со спинкой</span
+                    ><span class="chip">Вид на воду</span><span class="chip">Тихо</span>
+                  </div>
+                </div>
+
+                <div id="details">
+                  <div id="sheetBarBg"></div>
+                  <div id="sheetBar">
+                    <div class="fb">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M19 12H5M11 6l-6 6 6 6" />
+                      </svg>
+                    </div>
+                    <div class="fb" id="shareBtn">
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+                        <circle cx="18" cy="5" r="2.6" /><circle cx="6" cy="12" r="2.6" /><circle cx="18" cy="19" r="2.6" /><path d="M8.3 10.8l7.4-4.4M8.3 13.2l7.4 4.4" />
+                      </svg>
+                    </div>
+                  </div>
+
+                  <div id="scroll">
+                    <!-- Иллюстрация вместо фото: парк на закате -->
+                    <div id="hero">
+                      <svg viewBox="0 0 351 214" preserveAspectRatio="xMidYMid slice">
+                        <defs>
+                          <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0" stop-color="#ff8a4c" />
+                            <stop offset=".55" stop-color="#ffc58a" />
+                            <stop offset="1" stop-color="#ffe6c4" />
+                          </linearGradient>
+                          <linearGradient id="lake" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0" stop-color="#f7b88c" />
+                            <stop offset="1" stop-color="#7fa9a8" />
+                          </linearGradient>
+                        </defs>
+                        <rect width="351" height="214" fill="url(#sky)" />
+                        <g id="sunL" class="layer">
+                          <circle cx="232" cy="112" r="46" fill="#fff1d6" opacity=".55" />
+                          <circle cx="232" cy="112" r="30" fill="#fff6e2" />
+                        </g>
+                        <path id="hillsFar" class="layer" d="M-20 140c50-28 90-20 140-6s90-30 150-22 80 14 110 10v92H-20z" fill="#d79a6b" opacity=".55" />
+                        <rect y="132" width="351" height="30" fill="url(#lake)" />
+                        <g id="ripples" class="layer" stroke="#fff3df" stroke-width="2" stroke-linecap="round" opacity=".8">
+                          <path d="M200 140h40M214 147h22M196 154h50" />
+                        </g>
+                        <path id="hillsNear" class="layer" d="M-20 168c60-12 120-6 180 2s130-4 211-8v62H-20z" fill="#2e5a41" />
+                        <g id="treesL" class="layer" fill="#1d3a2a">
+                          <rect x="36" y="118" width="5" height="40" />
+                          <circle cx="38" cy="112" r="24" />
+                          <circle cx="62" cy="126" r="16" />
+                          <rect x="304" y="112" width="5" height="50" />
+                          <circle cx="306" cy="104" r="28" />
+                        </g>
+                        <g id="benchL" class="layer" fill="#142219">
+                          <use href="#bench" x="118" y="118" width="96" height="96" />
+                        </g>
+                        <rect width="351" height="214" fill="url(#sky)" opacity="0" />
+                      </svg>
+                    </div>
+
+                    <div id="title">Напротив фонтана</div>
+                    <div id="meta">Аня · 12 окт. · 350 м от вас</div>
+                    <div class="chips" id="tags">
+                      <span class="chip tg">✓ Вид на воду</span><span class="chip tg">✓ Со спинкой</span
+                      ><span class="chip tg">✓ Красивый вид</span>
+                    </div>
+
+                    <div id="rating">
+                      <div>
+                        <div id="score">4.9</div>
+                        <div class="stars">
+                          <svg class="st"><use href="#star" /></svg><svg class="st"><use href="#star" /></svg
+                          ><svg class="st"><use href="#star" /></svg><svg class="st"><use href="#star" /></svg
+                          ><svg class="st"><use href="#star" /></svg>
+                        </div>
+                      </div>
+                      <div class="bars">
+                        <div class="barRow">5<div class="track"><div class="fill" style="width: 88%"></div></div></div>
+                        <div class="barRow">4<div class="track"><div class="fill" style="width: 12%"></div></div></div>
+                        <div class="barRow">3<div class="track"><div class="fill" style="width: 4%"></div></div></div>
+                        <div class="barRow">2<div class="track"><div class="fill" style="width: 0%"></div></div></div>
+                      </div>
+                    </div>
+
+                    <div id="review">
+                      <div class="rhead">
+                        <div class="avatar">А</div>
+                        <div>
+                          <div class="rname">Аня</div>
+                          <div class="stars" style="margin-top: 3px">
+                            <svg><use href="#star" /></svg><svg><use href="#star" /></svg><svg><use href="#star" /></svg
+                            ><svg><use href="#star" /></svg><svg><use href="#star" /></svg>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="rtext">Лучшее место, чтобы встретить закат: тихо, вид на воду и удобная спинка.</div>
+                      <div class="likeRow">
+                        <div id="like">
+                          <div id="likeOn"></div>
+                          <div class="ripple" id="rp2" style="left: 50%; top: 50%"></div>
+                          <div id="heart">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                              <path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z" />
+                            </svg>
+                            <svg id="heartFull" viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z" />
+                            </svg>
+                          </div>
+                          <span style="position: relative">Полезно ·</span>
+                          <span class="count"><b id="c11">11</b><b id="c12">12</b></span>
+                          <span class="spark" id="s1"></span><span class="spark" id="s2"></span
+                          ><span class="spark" id="s3"></span><span class="spark" id="s4"></span
+                          ><span class="spark" id="s5"></span><span class="spark" id="s6"></span>
+                        </div>
+                      </div>
+                    </div>
+                    <div id="review2">
+                      <div class="rhead">
+                        <div class="avatar" style="background: var(--forest); color: var(--moss)">М</div>
+                        <div>
+                          <div class="rname">Миша</div>
+                          <div class="stars" style="margin-top: 3px">
+                            <svg><use href="#star" /></svg><svg><use href="#star" /></svg><svg><use href="#star" /></svg
+                            ><svg><use href="#star" /></svg><svg style="color: var(--sand-dark)"><use href="#star" /></svg>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="rtext">Утром здесь никого — кофе, книга и утки. Идеально.</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div id="toast">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M5 12l5 5L20 7" />
+                </svg>
+                Ссылка скопирована
+              </div>
+
+              <div class="ripple" id="rp1" style="left: 130px; top: 418px"></div>
+              <div class="ripple" id="rp3" style="left: 344px; top: 137px"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Подписи -->
+      <div id="captions" class="clip" data-start="2.2" data-duration="6.7" data-track-index="3">
+        <div class="caption" id="cap1">
+          <span class="line"><span class="w">Найди</span> <span class="w accent">скамейку</span></span>
+          <span class="line"><span class="w">рядом</span></span>
+        </div>
+        <div class="caption" id="cap2">
+          <span class="line"><span class="w">Оцени</span> <span class="w">и</span></span>
+          <span class="line"><span class="w accent">расскажи</span></span>
+        </div>
+        <div class="caption" id="cap3">
+          <span class="line"><span class="w">Поделись</span></span>
+          <span class="line"><span class="w accent">с друзьями</span></span>
+        </div>
+      </div>
+
+      <!-- 5. Финал -->
+      <div id="outro" class="clip" data-start="8.6" data-duration="1.4" data-track-index="4">
+        <div class="disc" id="outroDisc">
+          <svg viewBox="0 0 24 24" fill="currentColor"><use href="#bench" /></svg>
+        </div>
+        <div class="wordmark" id="outroWord">
+          <span>с</span><span>к</span><span>а</span><span>м</span><span>е</span><span>й</span><span>к</span><span>и</span>
+        </div>
+        <div id="url">benchhunt.vercel.app</div>
+        <div id="cta">
+          Найди своё место
+          <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 12h14M13 6l6 6-6 6" />
+          </svg>
+        </div>
+      </div>
+
+      <div id="grain" class="clip" data-start="0" data-duration="10" data-track-index="5"></div>
+    </div>
+
+    <script>
+      // Один корневой таймлайн, всё в абсолютных секундах (3-й аргумент).
+      const tl = gsap.timeline({ paused: true });
+      const EXPO = "expo.out";
+      const POP = "back.out(1.7)";
+
+      // ---------- исходные состояния ----------
+      gsap.set("#introDisc", { scale: 0, rotation: -120 });
+      gsap.set("#introDisc .bar", { scaleX: 0 });
+      gsap.set("#introWord span", { y: 150 });
+      gsap.set("#tagline", { opacity: 0, y: 30 });
+      gsap.set("#phone", { y: 1500, rotation: 9 });
+      gsap.set("#world", { scale: 1.12, opacity: 0 });
+      gsap.set(".pill", { y: -40, opacity: 0 });
+      gsap.set("#sheet", { y: 576 });
+      gsap.set("#cluster", { scale: 0 });
+      gsap.set("#user", { scale: 0 });
+      gsap.set(".caption .w", { y: 110 });
+      gsap.set("#outroDisc", { scale: 0, rotation: -120 });
+      gsap.set("#outroWord span", { y: 150 });
+      gsap.set(["#url", "#cta"], { opacity: 0, y: 40 });
+      gsap.set("#orbA", { x: 120, y: -80 });
+      gsap.set("#orbB", { x: -100, y: 60 });
+
+      // метки разлетаются из кружка-группы: стартовое смещение = центр группы − позиция метки
+      const pins = [
+        ["#p1", 95, 252],
+        ["#p2", 262, 214],
+        ["#p3", 305, 372],
+        ["#p4", 130, 430],
+        ["#p5", 236, 548],
+      ];
+      pins.forEach(([id, x, y]) => gsap.set(id, { x: 195 - x, y: 395 - y, scale: 0.2, opacity: 0 }));
+
+      // фон медленно «дышит» весь ролик
+      tl.to("#orbA", { x: -40, y: 60, duration: 10, ease: "sine.inOut" }, 0).to(
+        "#orbB",
+        { x: 60, y: -40, duration: 10, ease: "sine.inOut" },
+        0,
+      );
+
+      // ---------- 1. Интро ----------
+      tl.to("#introDisc", { scale: 1, rotation: 0, duration: 0.9, ease: EXPO }, 0.1)
+        .to("#introDisc .bar", { scaleX: 1, duration: 0.55, ease: EXPO, stagger: 0.06 }, 0.35)
+        .to("#introWord span", { y: 0, duration: 0.8, ease: EXPO, stagger: 0.04 }, 0.55)
+        .to("#tagline", { opacity: 1, y: 0, duration: 0.7, ease: EXPO }, 1.05)
+        .to("#introGroup", { y: -340, scale: 0.6, opacity: 0, duration: 0.75, ease: "power3.in" }, 1.85);
+
+      // ---------- 2. Телефон и карта ----------
+      tl.to("#phone", { y: 0, rotation: 0, duration: 1.2, ease: EXPO }, 2.0)
+        .to("#world", { scale: 1, opacity: 1, duration: 1.4, ease: "power2.out" }, 2.25)
+        .to(".pill", { y: 0, opacity: 1, duration: 0.7, ease: EXPO, stagger: 0.08 }, 2.6)
+        .from("#peek", { y: 40, opacity: 0, duration: 0.7, ease: EXPO }, 2.85)
+        .to("#cap1 .w", { y: 0, duration: 0.85, ease: EXPO, stagger: 0.07 }, 2.4)
+        .to("#cluster", { scale: 1, duration: 0.55, ease: POP }, 2.95)
+        .to("#cluster", { scale: 1.2, duration: 0.18, ease: "power2.out" }, 3.5)
+        .to("#cluster", { scale: 0, opacity: 0, duration: 0.25, ease: "power2.in" }, 3.68);
+      pins.forEach(([id], i) =>
+        tl.to(id, { x: 0, y: 0, scale: 1, opacity: 1, duration: 0.85, ease: EXPO }, 3.66 + i * 0.05),
+      );
+      tl.to("#user", { scale: 1, duration: 0.5, ease: POP }, 3.85).fromTo(
+        "#user i",
+        { scale: 1, opacity: 0.45 },
+        { scale: 2.6, opacity: 0, duration: 1.1, ease: "power1.out", repeat: 2 },
+        3.95,
+      );
+
+      // тап по скамейке 4.9 → метка активна → «камера» наезжает
+      tl.fromTo("#rp1", { scale: 0.2, opacity: 0.9 }, { scale: 1.8, opacity: 0, duration: 0.6, ease: "power2.out" }, 4.3)
+        .to("#p4", { scale: 0.9, duration: 0.1, ease: "power2.out" }, 4.3)
+        .to("#p4", { scale: 1.18, duration: 0.45, ease: POP }, 4.4)
+        .to("#pinActive", { opacity: 1, duration: 0.2 }, 4.4)
+        .to("#world", { scale: 1.65, y: -150, duration: 1.1, ease: "power3.inOut" }, 4.5)
+        .to(["#p1", "#p2", "#p3", "#p5", "#user"], { opacity: 0, duration: 0.45, ease: "power2.out" }, 4.55);
+
+      // ---------- 3. Карточка скамейки ----------
+      tl.to("#cap1 .w", { y: -110, duration: 0.5, ease: "power3.in", stagger: 0.04 }, 4.85)
+        .to("#sheet", { y: 0, duration: 1.0, ease: EXPO }, 5.0)
+        .to("#peek", { opacity: 0, duration: 0.25 }, 5.0)
+        .to("#details", { opacity: 1, duration: 0.3 }, 5.1)
+        .from("#hero", { scale: 0.92, duration: 1.0, ease: EXPO }, 5.1)
+        // параллакс иллюстрации: солнце поднимается, слои разъезжаются
+        .from("#sunL", { y: 36, duration: 2.4, ease: "power2.out" }, 5.1)
+        .from("#hillsFar", { x: -18, duration: 2.4, ease: "power2.out" }, 5.1)
+        .from("#hillsNear", { x: 26, duration: 2.4, ease: "power2.out" }, 5.1)
+        .from("#treesL", { x: 34, duration: 2.4, ease: "power2.out" }, 5.1)
+        .from("#benchL", { y: 26, opacity: 0, duration: 1.0, ease: EXPO }, 5.35)
+        .to("#ripples", { x: 10, duration: 2.6, ease: "sine.inOut" }, 5.1)
+        .from("#sheetBar .fb", { scale: 0, duration: 0.5, ease: POP, stagger: 0.06 }, 5.45)
+        .to("#cap2 .w", { y: 0, duration: 0.85, ease: EXPO, stagger: 0.07 }, 5.3)
+        .from(["#title", "#meta"], { y: 24, opacity: 0, duration: 0.8, ease: EXPO, stagger: 0.07 }, 5.55)
+        .from("#tags .tg", { scale: 0.4, opacity: 0, duration: 0.55, ease: POP, stagger: 0.08 }, 5.8)
+        .from("#rating", { y: 40, opacity: 0, duration: 0.8, ease: EXPO }, 5.9)
+        .from("#score", { scale: 0.5, opacity: 0, duration: 0.6, ease: POP }, 6.05)
+        .from("#rating .st", { scale: 0, rotation: -90, duration: 0.45, ease: POP, stagger: 0.07 }, 6.15)
+        .from(".fill", { scaleX: 0, duration: 0.9, ease: EXPO, stagger: 0.06 }, 6.2)
+        .from("#review", { y: 50, opacity: 0, duration: 0.8, ease: EXPO }, 6.3)
+        // плавно «прокручиваем» к отзыву
+        .from("#review2", { y: 50, opacity: 0, duration: 0.8, ease: EXPO }, 6.75)
+        .to("#scroll", { y: -248, duration: 1.0, ease: "power3.inOut" }, 6.65)
+        .to("#sheetBarBg", { opacity: 1, duration: 0.4, ease: "power2.out" }, 6.8);
+
+      // ---------- 4. Лайк и «Поделиться» ----------
+      tl.to("#cap2 .w", { y: -110, duration: 0.5, ease: "power3.in", stagger: 0.04 }, 7.05)
+        .to("#cap3 .w", { y: 0, duration: 0.85, ease: EXPO, stagger: 0.07 }, 7.3)
+        .fromTo("#rp2", { scale: 0.2, opacity: 0.9 }, { scale: 1.6, opacity: 0, duration: 0.55, ease: "power2.out" }, 7.4)
+        .to("#likeOn", { opacity: 1, duration: 0.2 }, 7.45)
+        .to("#heartFull", { opacity: 1, duration: 0.1 }, 7.45)
+        .fromTo("#heart", { scale: 0.6 }, { scale: 1.45, duration: 0.18, ease: "power2.out" }, 7.45)
+        .to("#heart", { scale: 1, duration: 0.45, ease: POP }, 7.63)
+        .to("#c11", { y: -16, opacity: 0, duration: 0.3, ease: "power2.in" }, 7.5)
+        .fromTo("#c12", { y: 16, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45, ease: EXPO }, 7.6);
+      const sparks = [
+        [-20, -16],
+        [0, -24],
+        [20, -16],
+        [-22, 8],
+        [22, 8],
+        [0, 18],
+      ];
+      sparks.forEach(([dx, dy], i) =>
+        tl
+          .fromTo(`#s${i + 1}`, { x: 0, y: 0, opacity: 1, scale: 1 }, { x: dx, y: dy, scale: 0.3, duration: 0.55, ease: "power3.out" }, 7.47)
+          .to(`#s${i + 1}`, { opacity: 0, duration: 0.25 }, 7.77),
+      );
+
+      tl.fromTo("#rp3", { scale: 0.2, opacity: 0.9 }, { scale: 1.6, opacity: 0, duration: 0.55, ease: "power2.out" }, 8.0)
+        .to("#shareBtn", { scale: 0.85, duration: 0.1 }, 8.0)
+        .to("#shareBtn", { scale: 1, duration: 0.4, ease: POP }, 8.1)
+        .fromTo("#toast", { y: -50, opacity: 0 }, { y: 0, opacity: 1, duration: 0.6, ease: EXPO }, 8.12);
+
+      // ---------- 5. Финал ----------
+      tl.to("#cap3 .w", { y: -110, duration: 0.45, ease: "power3.in", stagger: 0.04 }, 8.55)
+        .to("#phone", { y: 1500, rotation: -7, duration: 0.85, ease: "power3.in" }, 8.55)
+        .to("#outroDisc", { scale: 1, rotation: 0, duration: 0.8, ease: EXPO }, 8.95)
+        .to("#outroWord span", { y: 0, duration: 0.75, ease: EXPO, stagger: 0.035 }, 9.05)
+        .to("#url", { opacity: 1, y: 0, duration: 0.6, ease: EXPO }, 9.3)
+        .to("#cta", { opacity: 1, y: 0, duration: 0.7, ease: EXPO }, 9.4)
+        .fromTo("#cta", { scale: 0.86 }, { scale: 1, duration: 0.6, ease: POP }, 9.4);
+
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>

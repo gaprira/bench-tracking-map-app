@@ -11,6 +11,7 @@ import {
   Check,
   Clock,
   Heart,
+  Loader2,
   LocateFixed,
   Navigation,
   MapPin,
@@ -21,6 +22,7 @@ import {
   Send,
   Share2,
   Shield,
+  ShieldAlert,
   ShieldCheck,
   Star,
   Trash2,
@@ -183,8 +185,12 @@ function useStoredString(key: string): [string, (v: string) => void] {
   return [value, setValue];
 }
 
-async function fetchJson<T>(url: string): Promise<T> {
-  const res = await fetch(url, { cache: "no-store" });
+async function fetchJson<T>(url: string, adminKey = ""): Promise<T> {
+  // С ключом админа сервер отдаёт и скамейки «на проверке»
+  const res = await fetch(url, {
+    cache: "no-store",
+    headers: adminKey ? { "x-admin-key": adminKey } : undefined,
+  });
   if (!res.ok) throw new Error(String(res.status));
   return res.json();
 }
@@ -215,32 +221,35 @@ export default function BenchApp({ initialBenchId }: { initialBenchId?: number }
 
   const loadBenches = useCallback(async () => {
     try {
-      setBenches(await fetchJson<BenchSummary[]>("/api/benches"));
+      setBenches(await fetchJson<BenchSummary[]>("/api/benches", adminKey));
     } catch {
       setError("Не удалось загрузить скамейки");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [adminKey]);
 
   const loadDetails = useCallback(async (id: number) => {
     setDetailsLoading(true);
     try {
-      setDetails(await fetchJson<BenchDetails>(`/api/benches/${id}`));
+      setDetails(await fetchJson<BenchDetails>(`/api/benches/${id}`, adminKey));
     } catch {
       setError("Не удалось загрузить скамейку");
       setDetails(null);
     } finally {
       setDetailsLoading(false);
     }
-  }, []);
+  }, [adminKey]);
 
-  // Первая загрузка списка (состояние меняется только в колбэках промиса)
+  // Загрузка списка: при открытии и при входе/выходе админа (он видит ещё
+  // и скамейки «на проверке»). Состояние меняется только в колбэках промиса.
+  const initialHandled = useRef(false);
   useEffect(() => {
-    fetchJson<BenchSummary[]>("/api/benches")
+    fetchJson<BenchSummary[]>("/api/benches", adminKey)
       .then((list) => {
         setBenches(list);
-        if (initialBenchId !== undefined) {
+        if (initialBenchId !== undefined && !initialHandled.current) {
+          initialHandled.current = true;
           const b = list.find((x) => x.id === initialBenchId);
           if (b) setFocus({ lat: b.lat, lng: b.lng, zoom: 16 });
           loadDetails(initialBenchId);
@@ -248,7 +257,7 @@ export default function BenchApp({ initialBenchId }: { initialBenchId?: number }
       })
       .catch(() => setError("Не удалось загрузить скамейки"))
       .finally(() => setLoading(false));
-  }, [initialBenchId, loadDetails]);
+  }, [initialBenchId, loadDetails, adminKey]);
 
   // Единая точка выбора скамейки: сразу грузим карточку, без эффекта на selectedId.
   // Адрес в строке браузера — /bench/12, чтобы ссылкой можно было поделиться.
@@ -316,9 +325,16 @@ export default function BenchApp({ initialBenchId }: { initialBenchId?: number }
   };
 
   const handleCreated = (bench: BenchSummary) => {
-    setBenches((prev) => [bench, ...prev]);
     setDraft(null);
     setAddMode(false);
+    // Фото не похоже на скамейку — она ждёт модератора и на карте пока не видна
+    if (bench.status === "pending" && !adminKey) {
+      selectBench(null);
+      setMobileTab("map");
+      setNotice("Спасибо! Скамейку проверит модератор");
+      return;
+    }
+    setBenches((prev) => [bench, ...prev]);
     selectBench(bench.id);
     setFocus({ lat: bench.lat, lng: bench.lng });
   };
@@ -413,7 +429,7 @@ export default function BenchApp({ initialBenchId }: { initialBenchId?: number }
   }, [error]);
   useEffect(() => {
     if (!notice) return;
-    const t = setTimeout(() => setNotice(null), 2500);
+    const t = setTimeout(() => setNotice(null), notice.length > 24 ? 4500 : 2500);
     return () => clearTimeout(t);
   }, [notice]);
 
@@ -1089,6 +1105,12 @@ function BenchCard({
             новая
           </span>
         )}
+        {b.status === "pending" && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-tangerine px-2.5 py-1 text-xs font-bold text-white shadow">
+            <ShieldAlert size={12} />
+            на проверке
+          </span>
+        )}
         <span className="inline-flex items-center gap-1 rounded-full bg-night/50 px-2.5 py-1 text-xs font-bold text-white backdrop-blur-md">
           <MessageSquare size={12} />
           {b.reviewCount}
@@ -1145,6 +1167,32 @@ function AddBenchForm({
   const [viewPhoto, setViewPhoto] = useState<File | null>(null);
   const [tags, setTags] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  // Подсказка «похоже ли на скамейку» — та же модель на сервере, ничего не сохраняет
+  const [photoCheck, setPhotoCheck] = useState<
+    { state: "idle" } | { state: "checking" } | { state: "done"; isBench: boolean } | { state: "error" }
+  >({ state: "idle" });
+  const checkSeq = useRef(0);
+
+  const onBenchPhoto = (file: File | null) => {
+    setBenchPhoto(file);
+    const seq = ++checkSeq.current;
+    if (!file) {
+      setPhotoCheck({ state: "idle" });
+      return;
+    }
+    setPhotoCheck({ state: "checking" });
+    const fd = new FormData();
+    fd.append("photo", file);
+    fetch("/api/check-photo", { method: "POST", body: fd })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d: { isBench: boolean }) => {
+        if (seq === checkSeq.current) setPhotoCheck({ state: "done", isBench: d.isBench });
+      })
+      .catch(() => {
+        if (seq === checkSeq.current) setPhotoCheck({ state: "error" });
+      });
+  };
+  const looksWrong = photoCheck.state === "done" && !photoCheck.isBench;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1251,7 +1299,46 @@ function AddBenchForm({
 
         <Section n={2} title="Фотографии">
           <Field label="Сама скамейка *">
-            <PhotoCapture label="Фото скамейки" onPhoto={setBenchPhoto} required={true} />
+            <PhotoCapture label="Фото скамейки" onPhoto={onBenchPhoto} required={true} />
+            {photoCheck.state !== "idle" && (
+              <div
+                className={`mt-2 flex items-start gap-2 rounded-2xl px-3.5 py-2.5 text-xs font-semibold ${
+                  looksWrong
+                    ? "bg-tangerine/12 text-tangerine-dark"
+                    : photoCheck.state === "done"
+                      ? "bg-moss/25 text-forest-light"
+                      : "bg-sand/70 text-ink-soft"
+                }`}
+              >
+                {photoCheck.state === "checking" && (
+                  <>
+                    <Loader2 size={15} className="shrink-0 animate-spin" />
+                    Смотрим, что на фото…
+                  </>
+                )}
+                {photoCheck.state === "done" && photoCheck.isBench && (
+                  <>
+                    <Check size={15} className="shrink-0" strokeWidth={3} />
+                    Похоже на скамейку — отлично!
+                  </>
+                )}
+                {looksWrong && (
+                  <>
+                    <ShieldAlert size={15} className="mt-px shrink-0" />
+                    <span>
+                      Не похоже на скамейку. Сфотографируйте её поближе — или отправьте как есть,
+                      тогда скамейку сначала проверит модератор.
+                    </span>
+                  </>
+                )}
+                {photoCheck.state === "error" && (
+                  <>
+                    <AlertCircle size={15} className="shrink-0" />
+                    Не получилось проверить фото — его посмотрят после отправки.
+                  </>
+                )}
+              </div>
+            )}
           </Field>
           <Field label="Вид со скамейки *">
             <PhotoCapture label="Вид со скамейки" onPhoto={setViewPhoto} required={true} />
@@ -1291,7 +1378,7 @@ function AddBenchForm({
           disabled={saving || !title.trim() || !benchPhoto || !viewPhoto}
           className={`${primaryBtn} w-full py-3.5`}
         >
-          {saving ? "Сохраняем…" : "Сохранить скамейку"}
+          {saving ? "Сохраняем…" : looksWrong ? "Отправить на проверку" : "Сохранить скамейку"}
         </button>
       </div>
     </form>
@@ -1423,6 +1510,26 @@ function BenchDetailsPanel({
     }
     return list;
   }, [details, reviewSort, likeCounts]);
+
+  const [approving, setApproving] = useState(false);
+  const approve = async () => {
+    if (!details) return;
+    setApproving(true);
+    try {
+      const res = await fetch(`/api/benches/${details.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "x-admin-key": adminKey },
+        body: JSON.stringify({ status: "approved" }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Ошибка");
+      await onReviewAdded();
+    } catch (err) {
+      onError(err instanceof Error ? err.message : "Не удалось одобрить");
+    } finally {
+      setApproving(false);
+    }
+  };
 
   const startEdit = () => {
     setEditTitle(details?.title ?? "");
@@ -1667,6 +1774,27 @@ function BenchDetailsPanel({
                 </span>
               )}
             </div>
+
+            {details.status === "pending" && (
+              <div className="mt-4 rounded-[22px] bg-tangerine/12 p-4 ring-1 ring-tangerine/25">
+                <div className="flex items-center gap-2 text-sm font-extrabold text-tangerine-dark">
+                  <ShieldAlert size={17} /> На проверке
+                </div>
+                <p className="mt-1 text-xs leading-relaxed text-ink-soft">
+                  Модель не узнала скамейку на фото
+                  {typeof details.photoScore === "number"
+                    ? ` (уверенность ${Math.round(details.photoScore * 100)}%)`
+                    : ""}
+                  . Скамейку видите только вы — одобрите или удалите её.
+                </p>
+                {isAdmin && (
+                  <button onClick={approve} disabled={approving} className={`${primaryBtn} mt-3 w-full py-2.5`}>
+                    <Check size={16} strokeWidth={3} />
+                    {approving ? "Одобряем…" : "Одобрить и показать всем"}
+                  </button>
+                )}
+              </div>
+            )}
 
             {/* Сводка оценок */}
             <div className="mt-5 flex items-center gap-5 overflow-hidden rounded-[26px] bg-forest p-5 text-white">

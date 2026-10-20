@@ -25,3 +25,6 @@ tsconfig.tsbuildinfo
 
 # Android-приложение собирается локально, на сайт не нужно
 android-app
+
+# Промо-ролик (HyperFrames) — к сайту не относится
+promo-video

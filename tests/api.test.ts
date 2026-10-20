@@ -1,4 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// Настоящая модель в unit-тестах не нужна: решение «скамейка/нет» подменяем.
+// Если в названии файла есть "bench" — считаем, что на фото скамейка.
+vi.mock("@/lib/bench-classifier", () => ({
+  BENCH_THRESHOLD: 0.5,
+  checkBenchPhoto: vi.fn(async (buf: Buffer) => {
+    const isBench = buf.toString().includes("BENCH");
+    return { isBench, score: isBench ? 0.97 : 0.03 };
+  }),
+}));
 import { GET as listBenches, POST as createBench } from "@/app/api/benches/route";
 import {
   DELETE as deleteBench,
@@ -32,6 +42,7 @@ describe("API скамеек", () => {
   let reviewId = 0;
 
   it("создаёт скамейку с первой рецензией и отфильтрованными тегами", async () => {
+    // без фото обычный посетитель попал бы на модерацию — создаём от имени админа
     const res = await createBench(
       json({
         title: "  У пруда  ",
@@ -40,7 +51,7 @@ describe("API скамеек", () => {
         rating: 4,
         reviewText: "Хорошо",
         tags: ["water", "shade", "unknown", "shade"],
-      }),
+      }, ADMIN),
     );
     expect(res.status).toBe(201);
     const bench = await res.json();
@@ -49,6 +60,7 @@ describe("API скамеек", () => {
     expect(bench.tags).toEqual(["shade", "water"]);
     expect(bench.reviewCount).toBe(1);
     expect(bench.avgRating).toBe(4);
+    expect(bench.status).toBe("approved");
     benchId = bench.id;
   });
 
@@ -58,7 +70,7 @@ describe("API скамеек", () => {
   });
 
   it("отдаёт список и карточку с рецензиями", async () => {
-    const list = await (await listBenches()).json();
+    const list = await (await listBenches(new Request("http://test"))).json();
     expect(list.some((b: { id: number }) => b.id === benchId)).toBe(true);
 
     const details = await (await getBench(new Request("http://test"), ctx(benchId))).json();
@@ -118,5 +130,54 @@ describe("API скамеек", () => {
       200,
     );
     expect((await getBench(new Request("http://test"), ctx(benchId))).status).toBe(404);
+  });
+
+  describe("модерация по фото", () => {
+    const upload = (photo: string, headers: Record<string, string> = {}) => {
+      const fd = new FormData();
+      fd.append("title", "Фото-тест");
+      fd.append("lat", "55.7");
+      fd.append("lng", "37.6");
+      fd.append("benchPhoto", new File([photo], "b.jpg", { type: "image/jpeg" }));
+      fd.append("viewPhoto", new File(["VIEW"], "v.jpg", { type: "image/jpeg" }));
+      return createBench(new Request("http://test", { method: "POST", body: fd, headers }));
+    };
+
+    it("похоже на скамейку — сразу на карте", async () => {
+      const bench = await (await upload("BENCH")).json();
+      expect(bench).toMatchObject({ status: "approved", photoScore: 0.97 });
+      const list = await (await listBenches(new Request("http://test"))).json();
+      expect(list.some((b: { id: number }) => b.id === bench.id)).toBe(true);
+    });
+
+    it("не похоже — на проверке: скрыта от всех, кроме админа, пока её не одобрят", async () => {
+      const bench = await (await upload("CAT")).json();
+      expect(bench).toMatchObject({ status: "pending", photoScore: 0.03 });
+
+      const pub = await (await listBenches(new Request("http://test"))).json();
+      expect(pub.some((b: { id: number }) => b.id === bench.id)).toBe(false);
+      expect((await getBench(new Request("http://test"), ctx(bench.id))).status).toBe(404);
+      expect((await createReview(json({ rating: 5, text: "x" }), ctx(bench.id))).status).toBe(404);
+
+      const admin = await (await listBenches(new Request("http://test", { headers: ADMIN }))).json();
+      expect(admin.find((b: { id: number }) => b.id === bench.id)?.status).toBe("pending");
+
+      // одобрить может только админ
+      expect((await patchBench(withMethod("PATCH", { status: "approved" }), ctx(bench.id))).status).toBe(401);
+      const ok = await patchBench(withMethod("PATCH", { status: "approved" }, ADMIN), ctx(bench.id));
+      expect(ok.status).toBe(200);
+      expect((await ok.json()).title).toBe("Фото-тест"); // название не стёрлось
+      expect((await getBench(new Request("http://test"), ctx(bench.id))).status).toBe(200);
+    });
+
+    it("админ публикует сразу, даже если фото не похоже", async () => {
+      const bench = await (await upload("CAT", ADMIN)).json();
+      expect(bench.status).toBe("approved");
+    });
+
+    it("без фото (запрос к API напрямую) — на проверку", async () => {
+      const bench = await (await createBench(json({ title: "Без фото", lat: 1, lng: 1 }))).json();
+      expect(bench.status).toBe("pending");
+    });
   });
 });

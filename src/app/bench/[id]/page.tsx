@@ -22,7 +22,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!Number.isInteger(benchId)) return {};
   try {
     const [bench] = await db.select().from(benches).where(eq(benches.id, benchId));
-    if (!bench) return { title: "Скамейка не найдена — Скамейки" };
+    if (!bench || (bench.status ?? "approved") !== "approved")
+      return { title: "Скамейка не найдена — Скамейки" };
     const [summary] = await db
       .select({ reviewCount: count(reviews.id), avgRating: avg(reviews.rating) })
       .from(reviews)

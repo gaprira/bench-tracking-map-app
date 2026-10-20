@@ -35,5 +35,8 @@ describe("самомиграция облачной базы", () => {
       { title: "Старая", tags: [] },
     ]);
     expect(mem.public.many("SELECT text, likes FROM reviews")).toEqual([{ text: "ок", likes: 0 }]);
+    expect(mem.public.many("SELECT status, photo_score FROM benches")).toEqual([
+      { status: "approved", photo_score: null },
+    ]);
   });
 });

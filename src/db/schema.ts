@@ -2,6 +2,7 @@ import {
   doublePrecision,
   integer,
   pgTable,
+  real,
   serial,
   text,
   timestamp,
@@ -20,6 +21,10 @@ export const benches = pgTable("benches", {
   viewPhoto: text("view_photo"),
   // id удобств из src/lib/tags.ts
   tags: text("tags").array().notNull().default(sql`'{}'::text[]`),
+  // Модерация: "approved" — видна всем, "pending" — фото не похоже на скамейку,
+  // ждёт решения админа. photoScore — уверенность модели (0..1), что на фото скамейка
+  status: varchar("status", { length: 16 }).notNull().default("approved"),
+  photoScore: real("photo_score"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

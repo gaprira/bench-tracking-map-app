@@ -3,10 +3,14 @@ import { benches, reviews } from "@/db/schema";
 import { avg, count, desc, eq } from "drizzle-orm";
 import { saveUploadedFile, validateImageFile } from "@/lib/upload";
 import { normalizeTags } from "@/lib/tags";
+import { checkAdmin } from "@/lib/admin";
+import { checkBenchPhoto } from "@/lib/bench-classifier";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+// Обычные посетители видят только одобренные скамейки, админ — ещё и «на проверке»
+export async function GET(request: Request) {
+  const isAdmin = checkAdmin(request);
   const rows = await db
     .select({
       id: benches.id,
@@ -19,6 +23,8 @@ export async function GET() {
       benchPhoto: benches.benchPhoto,
       viewPhoto: benches.viewPhoto,
       tags: benches.tags,
+      status: benches.status,
+      photoScore: benches.photoScore,
       reviewCount: count(reviews.id),
       avgRating: avg(reviews.rating),
     })
@@ -28,8 +34,11 @@ export async function GET() {
     .orderBy(desc(benches.createdAt));
 
   return Response.json(
-    rows.map((r: any) => ({
+    rows
+      .filter((r: any) => isAdmin || (r.status ?? "approved") === "approved")
+      .map((r: any) => ({
       ...r,
+      status: r.status ?? "approved",
       tags: r.tags ?? [],
       createdAt: r.createdAt.toISOString(),
       reviewCount: Number(r.reviewCount),
@@ -39,6 +48,10 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const isAdmin = checkAdmin(request);
+  // Без фото проверять нечего — такие скамейки (API напрямую) сразу на модерацию
+  let status: "approved" | "pending" = isAdmin ? "approved" : "pending";
+  let photoScore: number | null = null;
   const contentType = request.headers.get("content-type") || "";
   let title = "";
   let description = "";
@@ -82,6 +95,17 @@ export async function POST(request: Request) {
       return Response.json({ error: `Фото вида: ${viewPhotoError}` }, { status: 400 });
     }
 
+    // Своя модель смотрит, похоже ли фото на скамейку. Не похоже — не отказываем,
+    // а отправляем на проверку админу (модель иногда ошибается)
+    try {
+      const check = await checkBenchPhoto(Buffer.from(await benchPhotoFile.arrayBuffer()));
+      photoScore = check.score;
+      status = isAdmin || check.isBench ? "approved" : "pending";
+    } catch (err) {
+      console.error("Распознавание фото не сработало:", err);
+      status = isAdmin ? "approved" : "pending";
+    }
+
     benchPhotoPath = await saveUploadedFile(benchPhotoFile, "bench");
     viewPhotoPath = await saveUploadedFile(viewPhotoFile, "view");
   } else {
@@ -118,7 +142,7 @@ export async function POST(request: Request) {
 
   const [created] = await db
     .insert(benches)
-    .values({ title, description: description || null, lat, lng, createdBy, benchPhoto: benchPhotoPath, viewPhoto: viewPhotoPath, tags })
+    .values({ title, description: description || null, lat, lng, createdBy, benchPhoto: benchPhotoPath, viewPhoto: viewPhotoPath, tags, status, photoScore })
     .returning();
 
   if (rating !== undefined && reviewText) {
@@ -142,6 +166,7 @@ export async function POST(request: Request) {
   return Response.json(
     {
       ...created,
+      status: created.status ?? status,
       createdAt: created.createdAt.toISOString(),
       reviewCount: Number(summary?.reviewCount ?? 0),
       avgRating: summary?.avgRating === null || summary?.avgRating === undefined

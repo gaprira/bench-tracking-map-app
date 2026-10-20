@@ -1,6 +1,7 @@
 import { db } from "@/db";
 import { benches, reviews } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { checkAdmin } from "@/lib/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -39,10 +40,10 @@ export async function POST(request: Request, { params }: Ctx) {
   }
 
   const [bench] = await db
-    .select({ id: benches.id })
+    .select({ id: benches.id, status: benches.status })
     .from(benches)
     .where(eq(benches.id, benchId));
-  if (!bench) {
+  if (!bench || ((bench.status ?? "approved") !== "approved" && !checkAdmin(request))) {
     return Response.json({ error: "Скамейка не найдена" }, { status: 404 });
   }
 

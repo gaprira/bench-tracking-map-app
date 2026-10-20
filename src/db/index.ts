@@ -294,22 +294,21 @@ if (!databaseUrl) {
   if (!p.__benchSchemaPatched) {
     p.__benchSchemaPatched = true;
     const rawQuery = p.query.bind(p) as (...args: unknown[]) => Promise<unknown>;
+    // Колонки, которых могло не быть в базе до деплоя: [таблица, колонка, SQL]
+    const columns: [string, string, string][] = [
+      ["benches", "tags", `ALTER TABLE benches ADD COLUMN IF NOT EXISTS tags text[] NOT NULL DEFAULT '{}'::text[]`],
+      ["reviews", "likes", `ALTER TABLE reviews ADD COLUMN IF NOT EXISTS likes integer NOT NULL DEFAULT 0`],
+      ["benches", "status", `ALTER TABLE benches ADD COLUMN IF NOT EXISTS status varchar(16) NOT NULL DEFAULT 'approved'`],
+      ["benches", "photo_score", `ALTER TABLE benches ADD COLUMN IF NOT EXISTS photo_score real`],
+    ];
     const ready = (async () => {
       const res = (await rawQuery(
         `SELECT table_name, column_name FROM information_schema.columns
-         WHERE (table_name = 'benches' AND column_name = 'tags')
-            OR (table_name = 'reviews' AND column_name = 'likes')`,
-      )) as { rows: { table_name: string }[] };
-      const has = new Set(res.rows.map((r) => r.table_name));
-      if (!has.has("benches")) {
-        await rawQuery(
-          `ALTER TABLE benches ADD COLUMN IF NOT EXISTS tags text[] NOT NULL DEFAULT '{}'::text[]`,
-        );
-      }
-      if (!has.has("reviews")) {
-        await rawQuery(
-          `ALTER TABLE reviews ADD COLUMN IF NOT EXISTS likes integer NOT NULL DEFAULT 0`,
-        );
+         WHERE table_name IN ('benches', 'reviews')`,
+      )) as { rows: { table_name: string; column_name: string }[] };
+      const has = new Set(res.rows.map((r) => `${r.table_name}.${r.column_name}`));
+      for (const [table, column, sql] of columns) {
+        if (!has.has(`${table}.${column}`)) await rawQuery(sql);
       }
     })().catch((err) => {
       console.error("Не удалось проверить/обновить схему БД:", err);
