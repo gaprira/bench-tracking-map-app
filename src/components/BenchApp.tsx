@@ -434,11 +434,11 @@ export default function BenchApp({ initialBenchId }: { initialBenchId?: number }
 
       {/* Верхняя панель */}
       <header className="pointer-events-none absolute inset-x-3 top-3 z-30 flex items-start justify-between gap-2 md:inset-x-4 md:top-4">
-        <div className="pointer-events-auto flex items-center gap-3 rounded-full bg-paper/90 py-1.5 pl-1.5 pr-4 shadow-[0_10px_30px_-12px_rgb(23_34_27/0.45)] ring-1 ring-ink/5 backdrop-blur-xl">
+        <div className="pointer-events-auto flex items-center gap-3 rounded-full bg-paper/90 py-1.5 pl-1.5 pr-1.5 min-[400px]:pr-4 shadow-[0_10px_30px_-12px_rgb(23_34_27/0.45)] ring-1 ring-ink/5 backdrop-blur-xl">
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-forest text-moss">
             <BenchGlyph size={24} />
           </div>
-          <div className="leading-none">
+          <div className="hidden leading-none min-[400px]:block">
             <h1 className="font-display text-[17px] font-bold tracking-tight text-ink">
               скамейки
             </h1>
