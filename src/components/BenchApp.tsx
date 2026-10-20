@@ -2,6 +2,28 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  AlertCircle,
+  ArrowLeft,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  LocateFixed,
+  MapPin,
+  MessageSquare,
+  Pencil,
+  Plus,
+  Search,
+  Send,
+  Shield,
+  ShieldCheck,
+  Star,
+  Trash2,
+  TrendingUp,
+  User,
+  X,
+} from "lucide-react";
 import type { BenchDetails, BenchSummary } from "@/lib/types";
 import Stars from "./Stars";
 import PhotoCapture from "./PhotoCapture";
@@ -9,9 +31,11 @@ import PhotoCapture from "./PhotoCapture";
 const BenchMap = dynamic(() => import("./BenchMap"), {
   ssr: false,
   loading: () => (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-gradient-to-br from-slate-100 to-emerald-50 text-slate-400">
-      <span className="animate-pulse-soft text-5xl">🗺️</span>
-      <span className="text-sm font-medium">Загружаем карту…</span>
+    <div className="flex h-full w-full items-center justify-center bg-[#e9e5da]">
+      <span className="flex items-center gap-2 rounded-full bg-paper px-4 py-2 text-sm font-semibold text-ink-soft shadow">
+        <span className="h-2 w-2 animate-ping rounded-full bg-tangerine" />
+        Загружаем карту…
+      </span>
     </div>
   ),
 });
@@ -36,16 +60,58 @@ function pluralReviews(n: number) {
   return `${n} рецензий`;
 }
 
-const AVATAR_GRADIENTS = [
-  "from-emerald-400 to-teal-500",
-  "from-amber-400 to-orange-500",
-  "from-sky-400 to-blue-500",
-  "from-rose-400 to-pink-500",
-  "from-violet-400 to-purple-500",
+function pluralBenches(n: number) {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return `${n} скамейка`;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return `${n} скамейки`;
+  return `${n} скамеек`;
+}
+
+const AVATAR_COLORS = [
+  "bg-forest text-moss",
+  "bg-tangerine text-paper",
+  "bg-moss text-forest",
+  "bg-sun text-ink",
+  "bg-ink text-sun",
+];
+
+// Те же цвета, что у меток на карте (BenchMap грузится только в браузере,
+// поэтому цвета продублированы, а не импортированы)
+const LEGEND = [
+  { color: "#2f9e5b", label: "4.5+" },
+  { color: "#8db33a", label: "3.5+" },
+  { color: "#f2a93b", label: "2.5+" },
+  { color: "#e5484d", label: "ниже" },
+  { color: "#a3aca5", label: "нет оценок" },
 ];
 
 const inputClass =
-  "w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-500/15";
+  "w-full rounded-2xl border border-sand bg-paper px-4 py-3 text-sm text-ink outline-none transition placeholder:text-ink-soft/60 focus:border-forest-light focus:ring-4 focus:ring-moss/30";
+
+const primaryBtn =
+  "inline-flex items-center justify-center gap-2 rounded-full bg-tangerine px-5 py-3 text-sm font-bold text-white shadow-lg shadow-tangerine/30 transition hover:bg-tangerine-dark active:scale-[0.97] disabled:bg-sand-dark disabled:text-ink-soft disabled:shadow-none";
+
+const ghostBtn =
+  "inline-flex items-center justify-center gap-2 rounded-full border border-sand bg-paper px-5 py-3 text-sm font-bold text-ink transition hover:bg-cream active:scale-[0.97] disabled:opacity-50";
+
+const iconBtn =
+  "flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition active:scale-90";
+
+/** Логотип: скамейка, как на иконке приложения */
+function BenchGlyph({ size = 22, className = "" }: { size?: number; className?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden>
+      <rect x="4.6" y="6.2" width="14.8" height="1.9" rx=".95" />
+      <rect x="4.6" y="9.2" width="14.8" height="1.9" rx=".95" />
+      <rect x="6.2" y="6.2" width="1.5" height="8" rx=".5" />
+      <rect x="16.3" y="6.2" width="1.5" height="8" rx=".5" />
+      <rect x="3.6" y="12.6" width="16.8" height="2.2" rx="1" />
+      <rect x="5.4" y="14" width="1.7" height="5" rx=".6" />
+      <rect x="16.9" y="14" width="1.7" height="5" rx=".6" />
+    </svg>
+  );
+}
 
 export default function BenchApp() {
   const [benches, setBenches] = useState<BenchSummary[]>([]);
@@ -60,6 +126,7 @@ export default function BenchApp() {
   const [sort, setSort] = useState<Sort>("new");
   const [error, setError] = useState<string | null>(null);
   const [author, setAuthor] = useState("");
+  // На телефоне: "map" — шторка свёрнута, "list" — развёрнута
   const [mobileTab, setMobileTab] = useState<"map" | "list">("map");
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -181,11 +248,19 @@ export default function BenchApp() {
       setError("Геолокация недоступна в этом браузере");
       return;
     }
+    setMobileTab("map");
     navigator.geolocation.getCurrentPosition(
       (pos) =>
         setFocus({ lat: pos.coords.latitude, lng: pos.coords.longitude, zoom: 16 }),
       () => setError("Не удалось определить местоположение"),
     );
+  };
+
+  const toggleAddMode = () => {
+    setAddMode((v) => !v);
+    setDraft(null);
+    setSelectedId(null);
+    setMobileTab("map");
   };
 
   const filtered = useMemo(() => {
@@ -222,242 +297,229 @@ export default function BenchApp() {
     return () => clearTimeout(t);
   }, [error]);
 
+  const sheetOpen = mobileTab === "list";
+
   return (
-    <div className="flex h-dvh flex-col bg-slate-100">
-      {/* Header */}
-      <header className="relative z-20 overflow-hidden bg-gradient-to-r from-emerald-800 via-emerald-700 to-teal-600 shadow-lg shadow-emerald-900/20">
-        <div className="bg-dots-emerald absolute inset-0" aria-hidden />
-        <div className="relative flex items-center flex-wrap justify-center gap-3 px-3 py-3 md:justify-between md:px-6">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-2xl shadow-lg ring-4 ring-white/20">
-              🪑
-            </div>
-            <div>
-              <h1 className="text-xl font-extrabold leading-tight tracking-tight text-white drop-shadow-sm">
-                Скамейки
-              </h1>
-              <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] font-medium text-emerald-100">
-                <span className="rounded-full bg-white/15 px-2 py-0.5">
-                  {stats.total} на карте
-                </span>
-                <span className="rounded-full bg-white/15 px-2 py-0.5">
-                  {pluralReviews(stats.reviewsTotal)}
-                </span>
-                {stats.avg !== null && (
-                  <span className="rounded-full bg-amber-400 px-2 py-0.5 font-extrabold text-amber-950">
-                    ★ {stats.avg.toFixed(1)}
-                  </span>
-                )}
-              </p>
-            </div>
+    <div className="relative h-dvh overflow-hidden bg-cream">
+      {/* Карта на весь экран */}
+      <div className="absolute inset-0 isolate">
+        <BenchMap
+          benches={benches}
+          selectedId={selectedId}
+          draft={draft}
+          focus={focus}
+          onSelect={handleSelect}
+          onMapClick={handleMapClick}
+        />
+      </div>
+
+      {/* Верхняя панель */}
+      <header className="pointer-events-none absolute inset-x-3 top-3 z-30 flex items-start justify-between gap-2 md:inset-x-4 md:top-4">
+        <div className="pointer-events-auto flex items-center gap-3 rounded-full bg-paper/90 py-1.5 pl-1.5 pr-4 shadow-[0_10px_30px_-12px_rgb(23_34_27/0.45)] ring-1 ring-ink/5 backdrop-blur-xl">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-forest text-moss">
+            <BenchGlyph size={24} />
           </div>
-          <div className="flex items-center gap-2">
-            <input
-              value={author}
-              onChange={(e) => setAuthor(e.target.value)}
-              placeholder="Ваше имя"
-              maxLength={80}
-              className="hidden w-36 rounded-full border border-white/20 bg-white/10 px-4 py-1.5 text-sm text-white outline-none backdrop-blur-sm transition placeholder:text-emerald-200/60 focus:border-white/40 focus:bg-white/20 sm:block"
-            />
-            <button
-              onClick={locateMe}
-              title="Моё местоположение"
-              className="rounded-full border border-white/20 bg-white/10 px-3.5 py-1.5 text-sm backdrop-blur-sm transition hover:bg-white/20 active:scale-95"
-            >
-              📍
-            </button>
-            <button
-              onClick={() => {
-                if (adminKey) {
-                  setAdminKey("");
-                } else {
-                  setShowAdminLogin(true);
-                }
-              }}
-              title={
-                adminKey
-                  ? "Вы админ — нажмите, чтобы выйти из режима модерации"
-                  : "Войти как администратор"
-              }
-              className={
-                adminKey
-                  ? "rounded-full bg-emerald-400/95 px-3.5 py-1.5 text-sm font-bold text-emerald-950 shadow-lg shadow-emerald-400/30 transition active:scale-95"
-                  : "rounded-full border border-white/20 bg-white/10 px-3.5 py-1.5 text-sm backdrop-blur-sm transition hover:bg-white/20 active:scale-95"
-              }
-            >
-              {adminKey ? "🛡 Админ" : "🛡"}
-            </button>
-            <button
-              onClick={() => {
-                setAddMode((v) => !v);
-                setDraft(null);
-                setSelectedId(null);
-                setMobileTab("map");
-              }}
-              className={`rounded-full px-4 py-1.5 text-sm font-bold shadow-lg transition active:scale-95 ${
-                addMode
-                  ? "bg-white/15 text-white hover:bg-white/25"
-                  : "bg-amber-400 text-amber-950 shadow-amber-500/30 hover:bg-amber-300"
-              }`}
-            >
-              {addMode ? "Отмена" : "+ Добавить"}
-            </button>
+          <div className="leading-none">
+            <h1 className="font-display text-[17px] font-bold tracking-tight text-ink">
+              скамейки
+            </h1>
+            <p className="mt-1 hidden text-[11px] font-semibold text-ink-soft sm:block">
+              карта мест, где хорошо сидится
+            </p>
           </div>
+        </div>
+
+        <div className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-paper/90 p-1.5 shadow-[0_10px_30px_-12px_rgb(23_34_27/0.45)] ring-1 ring-ink/5 backdrop-blur-xl">
+          <button
+            onClick={locateMe}
+            title="Моё местоположение"
+            aria-label="Моё местоположение"
+            className={`${iconBtn} text-ink hover:bg-sand`}
+          >
+            <LocateFixed size={19} />
+          </button>
+          <button
+            onClick={() => {
+              if (adminKey) {
+                setAdminKey("");
+              } else {
+                setShowAdminLogin(true);
+              }
+            }}
+            title={
+              adminKey
+                ? "Вы админ — нажмите, чтобы выйти из режима модерации"
+                : "Войти как администратор"
+            }
+            aria-label="Режим администратора"
+            className={`${iconBtn} ${
+              adminKey ? "bg-forest text-moss" : "text-ink hover:bg-sand"
+            }`}
+          >
+            {adminKey ? <ShieldCheck size={19} /> : <Shield size={19} />}
+          </button>
+          <button
+            onClick={toggleAddMode}
+            aria-label={addMode ? "Отмена" : "Добавить скамейку"}
+            className={`flex h-10 w-10 items-center justify-center gap-1.5 rounded-full text-sm font-bold transition active:scale-95 sm:w-auto sm:px-4 ${
+              addMode
+                ? "bg-ink text-white"
+                : "bg-tangerine text-white shadow-lg shadow-tangerine/35 hover:bg-tangerine-dark"
+            }`}
+          >
+            {addMode ? <X size={18} strokeWidth={2.5} /> : <Plus size={19} strokeWidth={2.75} />}
+            <span className="hidden sm:inline">{addMode ? "Отмена" : "Добавить"}</span>
+          </button>
         </div>
       </header>
 
-      {/* Mobile tabs */}
-      <div className="flex bg-gradient-to-r from-emerald-800 to-teal-600 md:hidden">
-        {(["map", "list"] as const).map((t) => (
-          <button
-            key={t}
-            onClick={() => setMobileTab(t)}
-            className={`flex-1 py-2.5 text-sm font-semibold transition ${
-              mobileTab === t
-                ? "border-b-2 border-amber-400 bg-white/10 text-white"
-                : "text-emerald-200/70"
-            }`}
-          >
-            {t === "map" ? "Карта" : "Список"}
-          </button>
+      {/* Подсказка в режиме добавления */}
+      {addMode && !draft && (
+        <div className="pointer-events-none absolute left-1/2 top-[72px] z-30 -translate-x-1/2 animate-rise md:top-[84px]">
+          <div className="flex items-center gap-2 whitespace-nowrap rounded-full bg-ink px-4 py-2.5 text-sm font-semibold text-white shadow-xl">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="absolute inset-0 animate-ping rounded-full bg-tangerine" />
+              <span className="relative h-2.5 w-2.5 rounded-full bg-tangerine" />
+            </span>
+            Коснитесь карты, чтобы поставить точку
+          </div>
+        </div>
+      )}
+
+      {/* Легенда (десктоп) */}
+      <div className="absolute bottom-4 left-[452px] z-20 hidden items-center gap-3 rounded-full bg-paper/90 px-4 py-2 text-[11px] font-semibold text-ink-soft shadow-lg ring-1 ring-ink/5 backdrop-blur-xl lg:flex">
+        <span className="font-bold text-ink">Оценка</span>
+        {LEGEND.map((l) => (
+          <span key={l.label} className="flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-full" style={{ background: l.color }} />
+            {l.label}
+          </span>
         ))}
       </div>
 
-      <div className="relative flex min-h-0 flex-1">
-        {/* Sidebar */}
-        <aside
-          className={`${
-            mobileTab === "list" ? "flex" : "hidden"
-          } w-full flex-col border-r border-slate-200/80 bg-white shadow-xl p-4 md:p-6 md:flex md:w-[410px] lg:w-[450px]`}
+      {/* Панель: шторка снизу на телефоне, карточка слева на десктопе */}
+      <aside
+        className={`absolute inset-x-0 bottom-0 z-40 flex h-[86dvh] flex-col overflow-hidden rounded-t-[30px] bg-cream shadow-[0_-12px_40px_-12px_rgb(23_34_27/0.4)] transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] md:inset-x-auto md:bottom-4 md:left-4 md:top-[84px] md:h-auto md:w-[420px] md:translate-y-0 md:rounded-[30px] md:shadow-[0_20px_60px_-20px_rgb(23_34_27/0.5)] ${
+          sheetOpen ? "translate-y-0" : "translate-y-[calc(100%-140px)]"
+        }`}
+      >
+        <button
+          onClick={() => setMobileTab(sheetOpen ? "map" : "list")}
+          aria-label={sheetOpen ? "Свернуть" : "Развернуть"}
+          className="flex w-full shrink-0 justify-center pb-1 pt-2.5 md:hidden"
         >
-          {draft ? (
-            <AddBenchForm
-              draft={draft}
-              author={author}
-              onAuthorChange={setAuthor}
-              onCancel={() => {
-                setDraft(null);
-              }}
-              onCreated={handleCreated}
-              onError={setError}
-            />
-          ) : selectedId !== null ? (
-            <BenchDetailsPanel
-              details={details}
-              loading={detailsLoading}
-              author={author}
-              onAuthorChange={setAuthor}
-              onBack={() => setSelectedId(null)}
-              onDelete={() => handleDelete(selectedId)}
-              onReviewAdded={handleReviewAdded}
-              onError={setError}
-              isAdmin={Boolean(adminKey)}
-              adminKey={adminKey}
-            />
-          ) : (
-            <BenchList
-              benches={filtered}
-              loading={loading}
-              search={search}
-              onSearch={setSearch}
-              sort={sort}
-              onSort={setSort}
-              onSelect={handleSelect}
-              onStartAdd={() => {
-                setAddMode(true);
-                setMobileTab("map");
-              }}
-            />
-          )}
-        </aside>
+          <span className="h-1.5 w-11 rounded-full bg-sand-dark" />
+        </button>
 
-        {/* Map */}
-        <main
-          className={`${
-            mobileTab === "map" ? "block" : "hidden"
-          } md:block bg-dots-slate relative min-h-0 flex-1 bg-gradient-to-br from-slate-100 via-slate-50 to-emerald-50 p-3 md:p-4`}
-        >
-          <div className="relative h-full overflow-hidden md:rounded-2xl md:shadow-2xl md:shadow-emerald-900/15 md:ring-1 md:ring-slate-900/10">
-            <BenchMap
-            benches={benches}
-            selectedId={selectedId}
+        {draft ? (
+          <AddBenchForm
             draft={draft}
-            focus={focus}
-            onSelect={handleSelect}
-            onMapClick={handleMapClick}
-          />
-          </div>
-          {addMode && !draft && (
-            <div className="pointer-events-none absolute left-1/2 top-4 z-[1000] -translate-x-1/2 rounded-full bg-gradient-to-r from-amber-500 to-orange-400 px-5 py-2.5 text-sm font-bold text-white shadow-xl shadow-amber-500/30">
-              Нажмите на карту, чтобы отметить скамейку
-            </div>
-          )}
-          <div className="absolute bottom-4 left-4 z-[1000] hidden rounded-xl border border-white/60 bg-white/80 p-2.5 text-xs shadow-lg backdrop-blur-md sm:block">
-            <div className="mb-1.5 font-bold text-slate-700">Легенда</div>
-            <Legend color="#16a34a" label="4.5+ отличная" />
-            <Legend color="#65a30d" label="3.5–4.4 хорошая" />
-            <Legend color="#f59e0b" label="2.5–3.4 так себе" />
-            <Legend color="#dc2626" label="< 2.5 плохая" />
-            <Legend color="#64748b" label="без оценок" />
-          </div>
-        </main>
-
-        {error && (
-          <div className="absolute bottom-4 left-1/2 z-[2000] -translate-x-1/2 animate-fade-in rounded-full border border-rose-400/30 bg-rose-600 px-5 py-2.5 text-sm font-medium text-white shadow-xl shadow-rose-600/30">
-            {error}
-          </div>
-        )}
-
-        {/* Модальное подтверждение удаления */}
-        {deleteTarget !== null && (
-          <div
-            className="fixed inset-0 z-[4000] flex animate-fade-in items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"
-            onClick={() => !deleting && setDeleteTarget(null)}
-          >
-            <div
-              className="w-full max-w-sm animate-zoom-in rounded-3xl bg-white p-6 shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-100 text-2xl">
-                🗑️
-              </div>
-              <h2 className="text-center text-lg font-extrabold text-slate-900">
-                Удалить скамейку?
-              </h2>
-              <p className="mt-2 text-center text-sm leading-relaxed text-slate-500">
-                Скамейка и все её рецензии будут удалены. Действие необратимо.
-              </p>
-              <div className="mt-5 flex gap-2.5">
-                <button
-                  onClick={() => setDeleteTarget(null)}
-                  disabled={deleting}
-                  className="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
-                >
-                  Отмена
-                </button>
-                <button
-                  onClick={handleDeleteConfirmed}
-                  disabled={deleting}
-                  className="flex-1 rounded-xl bg-gradient-to-r from-rose-500 to-red-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-rose-600/25 transition hover:shadow-xl active:scale-[0.98] disabled:opacity-50"
-                >
-                  {deleting ? "Удаляем…" : "Удалить"}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Вход администратора */}
-        {showAdminLogin && (
-          <AdminLoginModal
-            onClose={() => setShowAdminLogin(false)}
-            onSuccess={(key) => {
-              setAdminKey(key);
-              setShowAdminLogin(false);
+            author={author}
+            onAuthorChange={setAuthor}
+            onCancel={() => {
+              setDraft(null);
             }}
+            onCreated={handleCreated}
             onError={setError}
           />
+        ) : selectedId !== null ? (
+          <BenchDetailsPanel
+            details={details}
+            loading={detailsLoading}
+            author={author}
+            onAuthorChange={setAuthor}
+            onBack={() => setSelectedId(null)}
+            onDelete={() => handleDelete(selectedId)}
+            onReviewAdded={handleReviewAdded}
+            onError={setError}
+            isAdmin={Boolean(adminKey)}
+            adminKey={adminKey}
+          />
+        ) : (
+          <BenchList
+            benches={filtered}
+            loading={loading}
+            stats={stats}
+            search={search}
+            onSearch={setSearch}
+            sort={sort}
+            onSort={setSort}
+            onSelect={handleSelect}
+            onExpand={() => setMobileTab("list")}
+            onStartAdd={() => {
+              setAddMode(true);
+              setMobileTab("map");
+            }}
+          />
         )}
+      </aside>
+
+      {error && (
+        <div className="absolute left-1/2 top-[72px] z-[3000] -translate-x-1/2 animate-rise md:top-[84px]">
+          <div className="flex items-center gap-2 rounded-full bg-ink px-4 py-2.5 text-sm font-semibold text-white shadow-2xl">
+            <AlertCircle size={17} className="text-tangerine" />
+            {error}
+          </div>
+        </div>
+      )}
+
+      {/* Модальное подтверждение удаления */}
+      {deleteTarget !== null && (
+        <Modal onClose={() => !deleting && setDeleteTarget(null)}>
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-tangerine/15 text-tangerine-dark">
+            <Trash2 size={24} />
+          </div>
+          <h2 className="text-center font-display text-lg font-bold text-ink">
+            Удалить скамейку?
+          </h2>
+          <p className="mt-2 text-center text-sm leading-relaxed text-ink-soft">
+            Скамейка и все её рецензии будут удалены. Действие необратимо.
+          </p>
+          <div className="mt-6 flex gap-2.5">
+            <button
+              onClick={() => setDeleteTarget(null)}
+              disabled={deleting}
+              className={`${ghostBtn} flex-1`}
+            >
+              Отмена
+            </button>
+            <button
+              onClick={handleDeleteConfirmed}
+              disabled={deleting}
+              className={`${primaryBtn} flex-1 !bg-[#e5484d] !shadow-[#e5484d]/30`}
+            >
+              {deleting ? "Удаляем…" : "Удалить"}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Вход администратора */}
+      {showAdminLogin && (
+        <AdminLoginModal
+          onClose={() => setShowAdminLogin(false)}
+          onSuccess={(key) => {
+            setAdminKey(key);
+            setShowAdminLogin(false);
+          }}
+          onError={setError}
+        />
+      )}
+    </div>
+  );
+}
+
+function Modal({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
+  return (
+    <div
+      className="fixed inset-0 z-[4000] flex animate-fade-in items-end justify-center bg-ink/50 p-3 backdrop-blur-sm sm:items-center sm:p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm animate-zoom-in rounded-[30px] bg-paper p-6 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {children}
       </div>
     </div>
   );
@@ -498,23 +560,16 @@ function AdminLoginModal({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-[4000] flex animate-fade-in items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"
-      onClick={onClose}
-    >
-      <form
-        onSubmit={submit}
-        className="w-full max-w-xs animate-zoom-in rounded-3xl bg-white p-6 shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-2xl">
-          🛡️
+    <Modal onClose={onClose}>
+      <form onSubmit={submit}>
+        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-forest text-moss">
+          <Shield size={24} />
         </div>
-        <h2 className="text-center text-lg font-extrabold text-slate-900">
-          Вход администратора
+        <h2 className="text-center font-display text-lg font-bold text-ink">
+          Вход для модератора
         </h2>
-        <p className="mt-1 text-center text-xs text-slate-400">
-          Введите ключ модерации — он сохранится в этом браузере
+        <p className="mt-1.5 text-center text-xs text-ink-soft">
+          Введите ключ — он сохранится в этом браузере
         </p>
         <input
           type="password"
@@ -522,38 +577,22 @@ function AdminLoginModal({
           value={key}
           onChange={(e) => setKey(e.target.value)}
           placeholder="Ключ администратора"
-          className="mt-4 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-500/15"
+          className={`${inputClass} mt-5`}
         />
         <div className="mt-4 flex gap-2.5">
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
-          >
+          <button type="button" onClick={onClose} className={`${ghostBtn} flex-1`}>
             Отмена
           </button>
           <button
             type="submit"
             disabled={checking || !key.trim()}
-            className="flex-1 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-emerald-600/25 transition hover:shadow-xl active:scale-[0.98] disabled:opacity-40"
+            className={`${primaryBtn} flex-1`}
           >
             {checking ? "Проверяем…" : "Войти"}
           </button>
         </div>
       </form>
-    </div>
-  );
-}
-
-function Legend({ color, label }: { color: string; label: string }) {
-  return (
-    <div className="flex items-center gap-2 text-slate-600">
-      <span
-        className="inline-block h-3 w-3 rounded-full border border-white shadow-sm"
-        style={{ background: color }}
-      />
-      {label}
-    </div>
+    </Modal>
   );
 }
 
@@ -587,61 +626,46 @@ function Lightbox({
   const photo = photos[index];
   if (!photo) return null;
 
+  const navBtn =
+    "absolute top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/15 text-white backdrop-blur-md transition hover:bg-white/30 active:scale-90";
+
   return (
     <div
-      className="fixed inset-0 z-[5000] flex animate-fade-in items-center justify-center bg-slate-950/85 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[5000] flex animate-fade-in items-center justify-center bg-ink/90 p-4 backdrop-blur-md"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
     >
-      <div
-        className="relative max-w-4xl animate-zoom-in"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="relative max-w-4xl animate-zoom-in" onClick={(e) => e.stopPropagation()}>
         <img
           src={photo.src}
           alt={photo.caption}
-          className="max-h-[80vh] w-auto max-w-full rounded-2xl bg-slate-900 object-contain shadow-2xl"
+          className="max-h-[80vh] w-auto max-w-full rounded-[24px] bg-ink object-contain shadow-2xl"
         />
-        {photos.length > 1 && (
-          <>
-            {index > 0 && (
-              <button
-                onClick={() => onIndex(index - 1)}
-                aria-label="Предыдущее фото"
-                className="absolute -left-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/15 text-2xl text-white shadow-lg backdrop-blur-sm transition hover:bg-white/30 active:scale-95"
-              >
-                ‹
-              </button>
-            )}
-            {index < photos.length - 1 && (
-              <button
-                onClick={() => onIndex(index + 1)}
-                aria-label="Следующее фото"
-                className="absolute -right-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/15 text-2xl text-white shadow-lg backdrop-blur-sm transition hover:bg-white/30 active:scale-95"
-              >
-                ›
-              </button>
-            )}
-          </>
+        {index > 0 && (
+          <button onClick={() => onIndex(index - 1)} aria-label="Предыдущее фото" className={`${navBtn} left-3`}>
+            <ChevronLeft size={24} />
+          </button>
         )}
-        <div className="mt-3 flex items-center justify-center gap-2 text-sm font-medium text-white/90">
-          <span className="rounded-full bg-white/10 px-3.5 py-1.5 backdrop-blur-sm">
+        {index < photos.length - 1 && (
+          <button onClick={() => onIndex(index + 1)} aria-label="Следующее фото" className={`${navBtn} right-3`}>
+            <ChevronRight size={24} />
+          </button>
+        )}
+        <div className="mt-4 flex justify-center">
+          <span className="rounded-full bg-white/10 px-4 py-2 text-sm font-semibold text-white/90 backdrop-blur">
             {photo.caption}
             {photos.length > 1 && (
               <span className="text-white/50"> · {index + 1} / {photos.length}</span>
             )}
           </span>
-          <span className="hidden text-xs text-white/50 sm:inline">
-            Esc или клик по фону — закрыть
-          </span>
         </div>
         <button
           onClick={onClose}
           aria-label="Закрыть"
-          className="absolute -right-2 -top-2 flex h-9 w-9 items-center justify-center rounded-full bg-white/15 text-lg text-white shadow-lg backdrop-blur-sm transition hover:rotate-90 hover:bg-white/30"
+          className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-full bg-ink/50 text-white backdrop-blur-md transition hover:rotate-90 hover:bg-ink/70"
         >
-          ✕
+          <X size={20} />
         </button>
       </div>
     </div>
@@ -650,150 +674,184 @@ function Lightbox({
 
 /* ---------------- List ---------------- */
 
+const SORTS: { key: Sort; label: string; icon: typeof Clock }[] = [
+  { key: "new", label: "Новые", icon: Clock },
+  { key: "rating", label: "Лучшие", icon: TrendingUp },
+  { key: "reviews", label: "Обсуждаемые", icon: MessageSquare },
+];
+
 function BenchList({
   benches,
   loading,
+  stats,
   search,
   onSearch,
   sort,
   onSort,
   onSelect,
+  onExpand,
   onStartAdd,
 }: {
   benches: BenchSummary[];
   loading: boolean;
+  stats: { total: number; reviewsTotal: number; avg: number | null };
   search: string;
   onSearch: (v: string) => void;
   sort: Sort;
   onSort: (v: Sort) => void;
   onSelect: (id: number) => void;
+  onExpand: () => void;
   onStartAdd: () => void;
 }) {
   return (
     <>
-      <div className="space-y-3 border-b border-slate-200/80 p-3">
-        <div className="relative">
-          <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
-            🔍
+      <div className="shrink-0 px-5 pb-3 pt-2 md:pt-6">
+        <button onClick={onExpand} className="block w-full text-left md:pointer-events-none">
+          <h2 className="font-display text-[26px] font-bold leading-[1.05] tracking-tight text-ink">
+            Где <span className="text-tangerine">присесть</span>
+            <br />
+            сегодня
+          </h2>
+        </button>
+        <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs font-bold">
+          <span className="rounded-full bg-forest px-3 py-1.5 text-moss">
+            {pluralBenches(stats.total)}
           </span>
+          <span className="rounded-full bg-sand px-3 py-1.5 text-ink">
+            {pluralReviews(stats.reviewsTotal)}
+          </span>
+          {stats.avg !== null && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-sun px-3 py-1.5 text-ink">
+              <Star size={12} fill="currentColor" strokeWidth={0} />
+              {stats.avg.toFixed(1)} в среднем
+            </span>
+          )}
+        </div>
+
+        <div className="relative mt-4">
+          <Search
+            size={17}
+            className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-ink-soft"
+          />
           <input
             value={search}
             onChange={(e) => onSearch(e.target.value)}
-            placeholder="Поиск по названию или описанию…"
-            className="w-full rounded-full border border-slate-200 bg-slate-100/80 py-2 pl-9 pr-3 text-sm outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-500/10"
+            onFocus={onExpand}
+            placeholder="Найти скамейку…"
+            className="w-full rounded-full border border-sand bg-paper py-3 pl-11 pr-4 text-sm text-ink outline-none transition placeholder:text-ink-soft/70 focus:border-forest-light focus:ring-4 focus:ring-moss/30"
           />
         </div>
-        <div className="flex gap-1.5 text-xs">
-          {(
-            [
-              ["new", "Новые"],
-              ["rating", "По рейтингу"],
-              ["reviews", "По отзывам"],
-            ] as const
-          ).map(([key, label]) => (
+        <div className="mt-3 flex gap-1 rounded-full bg-sand/70 p-1">
+          {SORTS.map(({ key, label, icon: Icon }) => (
             <button
               key={key}
               onClick={() => onSort(key)}
-              className={`rounded-full px-3 py-1.5 font-semibold transition ${
-                sort === key
-                  ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-600/25"
-                  : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-full px-2 py-2 text-xs font-bold transition ${
+                sort === key ? "bg-paper text-ink shadow-sm" : "text-ink-soft hover:text-ink"
               }`}
             >
+              <Icon size={13} />
               {label}
             </button>
           ))}
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-3">
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-6 pt-1">
         {loading ? (
-          <div className="p-6 text-center text-sm font-medium text-slate-400">
-            Загрузка…
+          <div className="space-y-3">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="h-48 animate-pulse rounded-[26px] bg-sand/80" />
+            ))}
           </div>
         ) : benches.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center p-8 text-center">
-            <div className="animate-pulse-soft mb-3 flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-emerald-100 to-amber-100 text-5xl shadow-inner">
-              🪑
+          <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
+            <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-forest text-moss">
+              <BenchGlyph size={40} />
             </div>
-            <p className="text-sm font-bold text-slate-700">
-              {search ? "Ничего не найдено" : "Пока ни одной скамейки"}
+            <p className="font-display text-base font-bold text-ink">
+              {search ? "Ничего не нашли" : "Пока пусто"}
             </p>
-            <p className="mt-1 text-xs text-slate-400">
+            <p className="mt-1 text-sm text-ink-soft">
               {search
-                ? "Попробуйте изменить запрос"
-                : "Отметьте первую — это займёт минуту"}
+                ? "Попробуйте другой запрос"
+                : "Отметьте первую скамейку — это займёт минуту"}
             </p>
             {!search && (
-              <button
-                onClick={onStartAdd}
-                className="mt-4 rounded-full bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-2 text-sm font-bold text-white shadow-lg shadow-emerald-600/25 transition hover:shadow-xl active:scale-95"
-              >
+              <button onClick={onStartAdd} className={`${primaryBtn} mt-5`}>
+                <Plus size={17} strokeWidth={2.75} />
                 Отметить первую
               </button>
             )}
           </div>
         ) : (
-          <ul className="space-y-2.5">
-            {benches.map((b) => (
-              <li key={b.id}>
-                <button
-                  onClick={() => onSelect(b.id)}
-                  className="group relative flex w-full items-stretch gap-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-white text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-lg hover:shadow-emerald-600/10"
-                >
-                  <div className="relative h-24 w-24 shrink-0 self-stretch">
-                    {b.benchPhoto ? (
-                      <img
-                        src={b.benchPhoto}
-                        alt=""
-                        loading="lazy"
-                        className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-105"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-emerald-50 to-amber-50 text-3xl">
-                        🪑
-                      </div>
-                    )}
-                    {b.avgRating !== null && (
-                      <span className="absolute bottom-1.5 left-1.5 rounded-full bg-slate-950/70 px-1.5 py-0.5 text-[10px] font-bold text-amber-300 backdrop-blur-sm">
-                        ★ {b.avgRating.toFixed(1)}
-                      </span>
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1 p-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="truncate font-bold text-slate-800 transition group-hover:text-emerald-700">
-                        {b.title}
-                      </div>
-                      <span className="shrink-0 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-emerald-400">
-                        ›
-                      </span>
-                    </div>
-                    {b.description && (
-                      <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-slate-500">
-                        {b.description}
-                      </p>
-                    )}
-                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs">
-                      {b.avgRating !== null ? (
-                        <Stars value={b.avgRating} size="sm" />
-                      ) : (
-                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-400">
-                          без оценок
-                        </span>
-                      )}
-                      <span className="text-slate-400">
-                        · {pluralReviews(b.reviewCount)}
-                      </span>
-                    </div>
-                  </div>
-                </button>
+          <ul className="space-y-3">
+            {benches.map((b, i) => (
+              <li key={b.id} className="animate-rise" style={{ animationDelay: `${Math.min(i, 8) * 45}ms` }}>
+                <BenchCard bench={b} onSelect={onSelect} />
               </li>
             ))}
           </ul>
         )}
       </div>
     </>
+  );
+}
+
+function BenchCard({ bench: b, onSelect }: { bench: BenchSummary; onSelect: (id: number) => void }) {
+  return (
+    <button
+      onClick={() => onSelect(b.id)}
+      className="group relative block h-48 w-full overflow-hidden rounded-[26px] bg-forest text-left shadow-[0_12px_30px_-16px_rgb(23_34_27/0.6)] transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_20px_40px_-18px_rgb(23_34_27/0.7)] active:scale-[0.99]"
+    >
+      {b.benchPhoto ? (
+        <img
+          src={b.benchPhoto}
+          alt=""
+          loading="lazy"
+          className="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-105"
+        />
+      ) : (
+        <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-forest-light to-forest text-moss/40">
+          <BenchGlyph size={96} />
+        </div>
+      )}
+      <span className="grain absolute inset-0" />
+      <span className="absolute inset-0 bg-gradient-to-t from-ink/85 via-ink/15 to-transparent" />
+
+      <span className="absolute left-3 top-3 flex gap-1.5">
+        {b.avgRating !== null ? (
+          <span className="inline-flex items-center gap-1 rounded-full bg-paper/95 px-2.5 py-1 text-xs font-extrabold text-ink shadow">
+            <Star size={12} className="text-sun" fill="currentColor" strokeWidth={0} />
+            {b.avgRating.toFixed(1)}
+          </span>
+        ) : (
+          <span className="rounded-full bg-paper/95 px-2.5 py-1 text-xs font-bold text-ink-soft shadow">
+            новая
+          </span>
+        )}
+        <span className="inline-flex items-center gap-1 rounded-full bg-ink/50 px-2.5 py-1 text-xs font-bold text-white backdrop-blur-md">
+          <MessageSquare size={12} />
+          {b.reviewCount}
+        </span>
+      </span>
+
+      <span className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 p-4">
+        <span className="min-w-0">
+          <span className="block truncate font-display text-lg font-bold leading-tight text-white">
+            {b.title}
+          </span>
+          {b.description && (
+            <span className="mt-1 block truncate text-xs font-medium text-white/75">
+              {b.description}
+            </span>
+          )}
+        </span>
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-tangerine text-white transition duration-300 group-hover:-rotate-45">
+          <ArrowLeft size={18} className="rotate-180" strokeWidth={2.5} />
+        </span>
+      </span>
+    </button>
   );
 }
 
@@ -862,78 +920,79 @@ function AddBenchForm({
 
   return (
     <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center gap-2.5 border-b border-slate-200/80 p-3">
+      <div className="flex shrink-0 items-center gap-3 px-5 pb-3 pt-2 md:pt-5">
         <button
           type="button"
           onClick={onCancel}
-          className="flex items-center gap-1 rounded-full bg-slate-100 px-3.5 py-1.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-200 active:scale-95"
+          aria-label="Назад"
+          className={`${iconBtn} bg-paper text-ink ring-1 ring-sand hover:bg-sand`}
         >
-          ← Назад
+          <ArrowLeft size={19} />
         </button>
-        <h2 className="text-base font-extrabold text-slate-800">
+        <h2 className="font-display text-xl font-bold tracking-tight text-ink">
           Новая скамейка
         </h2>
       </div>
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
-        <div className="rounded-xl border border-amber-100 bg-gradient-to-r from-amber-50 to-orange-50 px-3 py-2.5 text-xs font-medium text-amber-800">
-          📍 {draft.lat.toFixed(5)}, {draft.lng.toFixed(5)} — можно кликнуть по
-          карте ещё раз, чтобы переместить точку
+      <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 pb-6 pt-2">
+        <div className="flex items-center gap-2.5 rounded-2xl bg-forest px-4 py-3 text-xs font-semibold text-white/85">
+          <MapPin size={18} className="shrink-0 text-tangerine" />
+          <span>
+            <span className="font-mono text-moss">
+              {draft.lat.toFixed(5)}, {draft.lng.toFixed(5)}
+            </span>
+            <br />
+            Коснитесь карты ещё раз, чтобы передвинуть точку
+          </span>
         </div>
-        <Field label="Название *">
-          <input
-            required
-            maxLength={120}
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Например: Скамейка у пруда"
-            className={inputClass}
-          />
-        </Field>
-        <Field label="Описание">
-          <textarea
-            rows={3}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Вид, тень, спинка, рядом ли урна…"
-            className={`${inputClass} resize-none`}
-          />
-        </Field>
-        <Field label="Ваше имя">
-          <input
-            maxLength={80}
-            value={author}
-            onChange={(e) => onAuthorChange(e.target.value)}
-            placeholder="Аноним"
-            className={inputClass}
-          />
-        </Field>
 
-        <Field label="Фото скамейки *">
-          <PhotoCapture
-            label="Фото скамейки"
-            onPhoto={setBenchPhoto}
-            required={true}
-          />
-        </Field>
-        <Field label="Вид со скамейки *">
-          <PhotoCapture
-            label="Вид со скамейки"
-            onPhoto={setViewPhoto}
-            required={true}
-          />
-        </Field>
+        <Section n={1} title="Что за место">
+          <Field label="Название *">
+            <input
+              required
+              maxLength={120}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Например: скамейка у пруда"
+              className={inputClass}
+            />
+          </Field>
+          <Field label="Описание">
+            <textarea
+              rows={3}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Вид, тень, спинка, рядом ли урна…"
+              className={`${inputClass} resize-none`}
+            />
+          </Field>
+          <Field label="Ваше имя">
+            <input
+              maxLength={80}
+              value={author}
+              onChange={(e) => onAuthorChange(e.target.value)}
+              placeholder="Аноним"
+              className={inputClass}
+            />
+          </Field>
+        </Section>
 
-        <div className="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-3.5">
-          <div className="mb-2 text-sm font-bold text-emerald-900">
-            Первая рецензия (необязательно)
-          </div>
-          <div className="mb-2 flex items-center gap-2">
+        <Section n={2} title="Фотографии">
+          <Field label="Сама скамейка *">
+            <PhotoCapture label="Фото скамейки" onPhoto={setBenchPhoto} required={true} />
+          </Field>
+          <Field label="Вид со скамейки *">
+            <PhotoCapture label="Вид со скамейки" onPhoto={setViewPhoto} required={true} />
+          </Field>
+        </Section>
+
+        <Section n={3} title="Первое впечатление" hint="необязательно">
+          <div className="flex items-center gap-3">
             <Stars value={rating} onChange={setRating} size="lg" />
             {rating > 0 && (
               <button
                 type="button"
                 onClick={() => setRating(0)}
-                className="text-xs text-slate-400 transition hover:text-slate-600"
+                className="text-xs font-semibold text-ink-soft underline-offset-2 hover:underline"
               >
                 сбросить
               </button>
@@ -947,17 +1006,17 @@ function AddBenchForm({
             className={`${inputClass} resize-none`}
           />
           {(rating > 0) !== Boolean(reviewText.trim()) && (
-            <p className="mt-1 text-xs text-amber-600">
+            <p className="text-xs font-semibold text-tangerine-dark">
               Для рецензии нужны и оценка, и текст
             </p>
           )}
-        </div>
+        </Section>
       </div>
-      <div className="border-t border-slate-200/80 p-3">
+      <div className="shrink-0 border-t border-sand bg-cream/95 px-5 py-4 backdrop-blur">
         <button
           type="submit"
           disabled={saving || !title.trim() || !benchPhoto || !viewPhoto}
-          className="w-full rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-600/25 transition hover:shadow-xl active:scale-[0.98] disabled:opacity-40 disabled:shadow-none"
+          className={`${primaryBtn} w-full py-3.5`}
         >
           {saving ? "Сохраняем…" : "Сохранить скамейку"}
         </button>
@@ -966,12 +1025,35 @@ function AddBenchForm({
   );
 }
 
+function Section({
+  n,
+  title,
+  hint,
+  children,
+}: {
+  n: number;
+  title: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="space-y-3">
+      <div className="flex items-center gap-2.5">
+        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-ink font-display text-xs font-bold text-white">
+          {n}
+        </span>
+        <h3 className="font-display text-sm font-bold text-ink">{title}</h3>
+        {hint && <span className="text-xs font-medium text-ink-soft">· {hint}</span>}
+      </div>
+      {children}
+    </section>
+  );
+}
+
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-xs font-semibold text-slate-500">
-        {label}
-      </span>
+      <span className="mb-1.5 block pl-1 text-xs font-bold text-ink-soft">{label}</span>
       {children}
     </label>
   );
@@ -1101,46 +1183,89 @@ function BenchDetailsPanel({
     return d;
   }, [details]);
 
+  // Главное фото — вид со скамейки (если есть), второе — сама скамейка
+  const heroIndex = photos.length > 1 ? 1 : 0;
+  const hero = photos[heroIndex];
+
+  const floatingBtn = `${iconBtn} bg-paper/90 text-ink shadow-md backdrop-blur-md hover:bg-paper`;
+
+  const toolbar = (
+    <div className="flex items-center justify-between gap-2">
+      <button onClick={onBack} aria-label="Все скамейки" title="Все скамейки" className={floatingBtn}>
+        <ArrowLeft size={19} />
+      </button>
+      {isAdmin && (
+        <div className="flex items-center gap-1.5">
+          <button onClick={startEdit} aria-label="Изменить" title="Изменить" className={floatingBtn}>
+            <Pencil size={17} />
+          </button>
+          <button
+            onClick={onDelete}
+            aria-label="Удалить"
+            title="Удалить"
+            className={`${floatingBtn} !text-[#e5484d]`}
+          >
+            <Trash2 size={17} />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center justify-between gap-2 border-b border-slate-200/80 p-3">
-        <button
-          onClick={onBack}
-          className="flex items-center gap-1 rounded-full bg-slate-100 px-3.5 py-1.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-200 active:scale-95"
-        >
-          ← Все скамейки
-        </button>
-        {isAdmin && (
-          <div className="flex items-center gap-1">
-            <button
-              onClick={startEdit}
-              className="rounded-full px-3.5 py-1.5 text-xs font-semibold text-slate-500 transition hover:bg-slate-100 active:scale-95"
-            >
-              ✏️ Изменить
-            </button>
-            <button
-              onClick={onDelete}
-              className="rounded-full px-3.5 py-1.5 text-xs font-semibold text-rose-500 transition hover:bg-rose-50 hover:text-rose-600 active:scale-95"
-            >
-              🗑 Удалить
-            </button>
-          </div>
-        )}
-      </div>
-
       {loading && !details ? (
-        <div className="p-6 text-center text-sm font-medium text-slate-400">
-          Загрузка…
-        </div>
+        <>
+          <div className="px-4 pt-2 md:pt-4">{toolbar}</div>
+          <div className="space-y-3 p-5">
+            <div className="h-56 animate-pulse rounded-[26px] bg-sand/80" />
+            <div className="h-7 w-2/3 animate-pulse rounded-full bg-sand/80" />
+            <div className="h-4 w-1/2 animate-pulse rounded-full bg-sand/80" />
+          </div>
+        </>
       ) : !details ? (
-        <div className="p-6 text-center text-sm font-medium text-slate-400">
-          Скамейка не найдена
-        </div>
+        <>
+          <div className="px-4 pt-2 md:pt-4">{toolbar}</div>
+          <div className="p-8 text-center text-sm font-semibold text-ink-soft">
+            Скамейка не найдена
+          </div>
+        </>
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="border-b border-slate-100 p-4 pb-5">
+          {/* Обложка */}
+          {hero && !editing ? (
+            <div className="relative px-3 pt-1 md:pt-3">
+              <button
+                type="button"
+                onClick={() => setLightboxIndex(heroIndex)}
+                className="grain relative block h-64 w-full overflow-hidden rounded-[26px] bg-forest"
+                title="Открыть фото"
+              >
+                <img src={hero.src} alt={details.title} className="h-full w-full object-cover" />
+                <span className="absolute inset-0 bg-gradient-to-t from-ink/70 via-transparent to-ink/30" />
+                <span className="absolute bottom-4 left-4 rounded-full bg-ink/45 px-3 py-1 text-[11px] font-semibold text-white backdrop-blur-md">
+                  {hero.caption}
+                </span>
+              </button>
+              <div className="absolute inset-x-6 top-4 md:top-6">{toolbar}</div>
+              {photos.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => setLightboxIndex(0)}
+                  title={`Открыть: ${photos[0].caption}`}
+                  className="absolute -bottom-6 right-7 h-20 w-20 overflow-hidden rounded-[20px] border-4 border-cream shadow-lg transition hover:-rotate-3 hover:scale-105"
+                >
+                  <img src={photos[0].src} alt={photos[0].caption} className="h-full w-full object-cover" />
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="px-4 pt-2 md:pt-4">{toolbar}</div>
+          )}
+
+          <div className="px-5 pb-5 pt-4">
             {editing ? (
-              <div className="mt-1 space-y-2">
+              <div className="space-y-2.5">
                 <input
                   value={editTitle}
                   onChange={(e) => setEditTitle(e.target.value)}
@@ -1157,118 +1282,53 @@ function BenchDetailsPanel({
                   className={`${inputClass} resize-none`}
                 />
                 <div className="flex gap-2">
-                  <button
-                    onClick={() => setEditing(false)}
-                    className="rounded-full border border-slate-200 px-4 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
-                  >
+                  <button onClick={() => setEditing(false)} className={`${ghostBtn} py-2.5`}>
                     Отмена
                   </button>
                   <button
                     onClick={saveEdit}
                     disabled={editSaving || !editTitle.trim()}
-                    className="rounded-full bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-1.5 text-xs font-bold text-white shadow-lg shadow-emerald-600/25 transition hover:shadow-xl active:scale-[0.98] disabled:opacity-40"
+                    className={`${primaryBtn} py-2.5`}
                   >
                     {editSaving ? "Сохраняем…" : "Сохранить"}
                   </button>
                 </div>
               </div>
-            ) : photos.length === 0 ? (
+            ) : (
               <>
-                <h2 className="text-2xl font-extrabold leading-tight text-slate-900">
+                <h2 className={`font-display text-[26px] font-bold leading-[1.1] tracking-tight text-ink ${photos.length > 1 ? "pr-24" : ""}`}>
                   {details.title}
                 </h2>
                 {details.description && (
-                  <p className="mt-1.5 text-sm leading-relaxed text-slate-500">
+                  <p className="mt-2.5 text-[15px] leading-relaxed text-ink-soft">
                     {details.description}
                   </p>
                 )}
               </>
-            ) : null}
-
-            {/* Hero-фото: вид со скамейки с названием поверх */}
-            {!editing && photos.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setLightboxIndex(photos.length > 1 ? 1 : 0)}
-                className="group relative mt-1 block w-full overflow-hidden rounded-2xl shadow-md ring-1 ring-slate-900/5 transition duration-300 hover:shadow-2xl"
-                title="Открыть фото"
-              >
-                <img
-                  src={(photos.length > 1 ? photos[1] : photos[0]).src}
-                  alt={details.title}
-                  className="h-56 w-full object-cover transition duration-700 group-hover:scale-105"
-                />
-                <span className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/25 to-transparent" />
-                <span className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 p-4">
-                  <span className="min-w-0">
-                    <span className="block truncate text-left text-xl font-extrabold leading-tight text-white drop-shadow-md">
-                      {details.title}
-                    </span>
-                    <span className="mt-0.5 block text-left text-[11px] font-medium text-white/75">
-                      {(photos.length > 1 ? photos[1] : photos[0]).caption} · нажмите, чтобы увеличить
-                    </span>
-                  </span>
-                  {details.avgRating !== null && (
-                    <span className="flex shrink-0 items-center gap-1 rounded-full bg-slate-950/60 px-2.5 py-1 text-sm font-extrabold text-amber-300 backdrop-blur-sm">
-                      ★ {details.avgRating.toFixed(1)}
-                    </span>
-                  )}
-                </span>
-                <span className="absolute right-2.5 top-2.5 flex h-8 w-8 items-center justify-center rounded-full bg-white/25 text-sm text-white opacity-0 backdrop-blur-sm transition duration-300 group-hover:opacity-100">
-                  🔍
-                </span>
-              </button>
             )}
 
-            {/* Второе фото миниатюрой */}
-            {!editing && photos.length > 1 && (
-              <button
-                type="button"
-                onClick={() => setLightboxIndex(0)}
-                className="group relative mt-3 block overflow-hidden rounded-xl shadow-sm transition duration-300 hover:shadow-lg"
-                title={`Открыть: ${photos[0].caption}`}
-              >
-                <img
-                  src={photos[0].src}
-                  alt={photos[0].caption}
-                  className="h-24 w-40 object-cover transition duration-500 group-hover:scale-105"
-                />
-                <span className="absolute inset-0 flex items-end bg-gradient-to-t from-slate-950/70 via-transparent p-2">
-                  <span className="text-[11px] font-semibold text-white drop-shadow">
-                    {photos[0].caption}
-                  </span>
-                </span>
-              </button>
-            )}
-
-            {/* Описание под hero-фото */}
-            {!editing && photos.length > 0 && details.description && (
-              <p className="mt-2.5 text-sm leading-relaxed text-slate-500">
-                {details.description}
-              </p>
-            )}
-
-            <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
-              <span className="rounded-full bg-slate-100 px-2.5 py-1 font-medium">
-                👤 {details.createdBy}
+            <div className="mt-4 flex flex-wrap items-center gap-1.5 text-xs font-semibold text-ink-soft">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-sand/70 px-3 py-1.5">
+                <User size={13} /> {details.createdBy}
               </span>
-              <span className="rounded-full bg-slate-100 px-2.5 py-1">
-                {formatDate(details.createdAt)}
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-sand/70 px-3 py-1.5">
+                <CalendarDays size={13} /> {formatDate(details.createdAt)}
               </span>
-              <span className="rounded-full bg-slate-100 px-2.5 py-1 font-mono">
-                📍 {details.lat.toFixed(4)}, {details.lng.toFixed(4)}
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-sand/70 px-3 py-1.5 font-mono">
+                <MapPin size={13} /> {details.lat.toFixed(4)}, {details.lng.toFixed(4)}
               </span>
             </div>
 
-            <div className="mt-4 flex items-center gap-4 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-600 p-4 text-white shadow-lg shadow-emerald-700/25">
-              <div className="shrink-0 text-center">
-                <div className="text-3xl font-extrabold leading-none">
+            {/* Сводка оценок */}
+            <div className="mt-5 flex items-center gap-5 overflow-hidden rounded-[26px] bg-forest p-5 text-white">
+              <div className="shrink-0">
+                <div className="font-display text-5xl font-bold leading-none text-moss">
                   {details.avgRating !== null ? details.avgRating.toFixed(1) : "—"}
                 </div>
-                <div className="mt-1">
-                  <Stars value={details.avgRating ?? 0} size="sm" />
+                <div className="mt-2">
+                  <Stars value={details.avgRating ?? 0} size="sm" tone="dark" />
                 </div>
-                <div className="mt-0.5 text-[11px] font-medium text-emerald-100">
+                <div className="mt-1 text-[11px] font-semibold text-white/60">
                   {pluralReviews(details.reviewCount)}
                 </div>
               </div>
@@ -1277,14 +1337,11 @@ function BenchDetailsPanel({
                   const c = distribution[n - 1];
                   const pct = details.reviewCount ? (c / details.reviewCount) * 100 : 0;
                   return (
-                    <div
-                      key={n}
-                      className="flex items-center gap-2 text-[11px] font-medium text-emerald-50"
-                    >
+                    <div key={n} className="flex items-center gap-2 text-[11px] font-bold text-white/70">
                       <span className="w-2.5">{n}</span>
-                      <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/25">
+                      <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/10">
                         <div
-                          className="h-full rounded-full bg-amber-300 transition-all duration-500"
+                          className="h-full rounded-full bg-sun transition-all duration-700"
                           style={{ width: `${pct}%` }}
                         />
                       </div>
@@ -1294,113 +1351,104 @@ function BenchDetailsPanel({
                 })}
               </div>
             </div>
-          </div>
 
-          <form
-            onSubmit={submit}
-            className="border-b border-slate-100 bg-gradient-to-b from-emerald-50/80 to-white p-4"
-          >
-            <div className="mb-2 text-sm font-bold text-emerald-900">
-              Оставить рецензию
-            </div>
-            <div className="mb-2">
-              <Stars value={rating} onChange={setRating} size="lg" />
-            </div>
-            <textarea
-              rows={3}
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              maxLength={2000}
-              placeholder="Расскажите: удобно ли, чисто ли, какой вид…"
-              className="mb-2 w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/15"
-            />
-            <div className="flex gap-2">
-              <input
-                maxLength={80}
-                value={author}
-                onChange={(e) => onAuthorChange(e.target.value)}
-                placeholder="Ваше имя"
-                className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/15"
-              />
-              <button
-                type="submit"
-                disabled={saving || rating === 0 || !text.trim()}
-                className="rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-2 text-sm font-bold text-white shadow-lg shadow-emerald-600/25 transition hover:shadow-xl active:scale-[0.97] disabled:opacity-40 disabled:shadow-none"
-              >
-                {saving ? "…" : "Отправить"}
-              </button>
-            </div>
-          </form>
-
-          <div className="p-4">
-            <div className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-800">
-              Рецензии
-              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-700">
-                {details.reviewCount}
-              </span>
-            </div>
-            {details.reviews.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-400">
-                Пока никто не написал. Будьте первым! ✍️
+            {/* Новая рецензия */}
+            <form onSubmit={submit} className="mt-4 rounded-[26px] bg-paper p-5 ring-1 ring-sand">
+              <h3 className="font-display text-base font-bold text-ink">Как вам сиделось?</h3>
+              <div className="mt-3">
+                <Stars value={rating} onChange={setRating} size="lg" />
               </div>
-            ) : (
-              <ul className="space-y-2.5">
-                {details.reviews.map((r) => {
-                  const grad =
-                    AVATAR_GRADIENTS[
-                      r.author.charCodeAt(0) % AVATAR_GRADIENTS.length
-                    ];
-                  return (
-                    <li
-                      key={r.id}
-                      className="rounded-2xl border border-slate-200/80 bg-white p-3.5 shadow-sm"
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <div
-                          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br ${grad} text-sm font-extrabold text-white shadow-sm`}
-                        >
-                          {r.author.charAt(0).toUpperCase()}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="truncate text-sm font-bold text-slate-800">
-                              {r.author}
-                            </span>
-                            <span className="flex shrink-0 items-center gap-1.5">
-                              <span className="text-xs text-slate-400">
-                                {formatDate(r.createdAt)}
-                              </span>
-                              {isAdmin &&
-                                (confirmDelReview === r.id ? (
-                                  <button
-                                    onClick={() => deleteReview(r.id)}
-                                    className="rounded-full bg-rose-600 px-2.5 py-1 text-[11px] font-bold text-white shadow-sm transition hover:bg-rose-700"
-                                    title="Нажмите ещё раз для подтверждения"
-                                  >
-                                    Точно удалить?
-                                  </button>
-                                ) : (
-                                  <button
-                                    onClick={() => setConfirmDelReview(r.id)}
-                                    title="Удалить рецензию (админ)"
-                                    className="rounded-full p-1 text-slate-300 transition hover:bg-rose-50 hover:text-rose-500"
-                                  >
-                                    ✕
-                                  </button>
-                                ))}
-                            </span>
+              <textarea
+                rows={3}
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                maxLength={2000}
+                placeholder="Удобно ли, чисто ли, какой вид…"
+                className={`${inputClass} mt-3 resize-none bg-cream`}
+              />
+              <div className="mt-2.5 flex gap-2">
+                <input
+                  maxLength={80}
+                  value={author}
+                  onChange={(e) => onAuthorChange(e.target.value)}
+                  placeholder="Ваше имя"
+                  className={`${inputClass} min-w-0 flex-1 bg-cream`}
+                />
+                <button
+                  type="submit"
+                  disabled={saving || rating === 0 || !text.trim()}
+                  aria-label="Отправить"
+                  className={`${primaryBtn} shrink-0 px-4`}
+                >
+                  {saving ? "…" : <Send size={17} />}
+                </button>
+              </div>
+            </form>
+
+            {/* Рецензии */}
+            <div className="mt-6">
+              <div className="mb-3 flex items-baseline gap-2">
+                <h3 className="font-display text-lg font-bold text-ink">Рецензии</h3>
+                <span className="text-sm font-bold text-ink-soft">{details.reviewCount}</span>
+              </div>
+              {details.reviews.length === 0 ? (
+                <div className="rounded-[22px] border-2 border-dashed border-sand-dark p-6 text-center text-sm font-medium text-ink-soft">
+                  Пока никто не написал — будьте первым
+                </div>
+              ) : (
+                <ul className="space-y-2.5">
+                  {details.reviews.map((r) => {
+                    const color = AVATAR_COLORS[r.author.charCodeAt(0) % AVATAR_COLORS.length];
+                    return (
+                      <li key={r.id} className="rounded-[22px] bg-paper p-4 ring-1 ring-sand">
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full font-display text-sm font-bold ${color}`}
+                          >
+                            {r.author.charAt(0).toUpperCase()}
                           </div>
-                          <Stars value={r.rating} size="sm" />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="truncate text-sm font-extrabold text-ink">
+                                {r.author}
+                              </span>
+                              <span className="flex shrink-0 items-center gap-1.5">
+                                <span className="text-xs font-medium text-ink-soft">
+                                  {formatDate(r.createdAt)}
+                                </span>
+                                {isAdmin &&
+                                  (confirmDelReview === r.id ? (
+                                    <button
+                                      onClick={() => deleteReview(r.id)}
+                                      className="rounded-full bg-[#e5484d] px-2.5 py-1 text-[11px] font-bold text-white transition hover:brightness-110"
+                                      title="Нажмите ещё раз для подтверждения"
+                                    >
+                                      Точно удалить?
+                                    </button>
+                                  ) : (
+                                    <button
+                                      onClick={() => setConfirmDelReview(r.id)}
+                                      title="Удалить рецензию (админ)"
+                                      aria-label="Удалить рецензию"
+                                      className="rounded-full p-1 text-ink-soft/60 transition hover:bg-[#e5484d]/10 hover:text-[#e5484d]"
+                                    >
+                                      <X size={14} />
+                                    </button>
+                                  ))}
+                              </span>
+                            </div>
+                            <Stars value={r.rating} size="sm" />
+                          </div>
                         </div>
-                      </div>
-                      <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
-                        {r.text}
-                      </p>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
+                        <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-ink">
+                          {r.text}
+                        </p>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
           </div>
         </div>
       )}

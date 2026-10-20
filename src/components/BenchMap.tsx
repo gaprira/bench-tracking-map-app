@@ -7,6 +7,7 @@ import {
   Marker,
   TileLayer,
   Tooltip,
+  ZoomControl,
   useMap,
   useMapEvents,
 } from "react-leaflet";
@@ -22,38 +23,32 @@ type Props = {
   onMapClick: (lat: number, lng: number) => void;
 };
 
-const benchIcon = (color: string, active: boolean) =>
+// Метка-табличка: цветная точка по оценке + число (как цены на картах жилья)
+const benchIcon = (color: string, rating: number | null, active: boolean) =>
   L.divIcon({
     className: "",
-    html: `<div style="
-      width:${active ? 40 : 32}px;height:${active ? 40 : 32}px;
-      border-radius:50% 50% 50% 0;transform:rotate(-45deg);
-      background:${color};border:3px solid #fff;
-      box-shadow:0 3px 8px rgba(0,0,0,.35);
-      display:flex;align-items:center;justify-content:center;">
-      <span style="transform:rotate(45deg);font-size:${active ? 18 : 14}px;line-height:1">🪑</span>
-    </div>`,
-    iconSize: [active ? 40 : 32, active ? 40 : 32],
-    iconAnchor: [active ? 20 : 16, active ? 40 : 32],
-    tooltipAnchor: [0, active ? -40 : -32],
+    html: `<div class="bench-pin${active ? " bench-pin--active" : ""}" style="--pin:${color}">
+      <div class="bench-pin__body"><span class="bench-pin__dot"></span>${
+        rating !== null ? rating.toFixed(1) : "—"
+      }</div></div>`,
+    iconSize: [72, 44],
+    iconAnchor: [36, 44],
+    tooltipAnchor: [0, -44],
   });
 
 const draftIcon = L.divIcon({
   className: "",
-  html: `<div style="width:36px;height:36px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);
-    background:#f59e0b;border:3px dashed #fff;box-shadow:0 3px 8px rgba(0,0,0,.35);
-    display:flex;align-items:center;justify-content:center;">
-    <span style="transform:rotate(45deg);font-size:16px;line-height:1">➕</span></div>`,
-  iconSize: [36, 36],
-  iconAnchor: [18, 36],
+  html: `<div class="draft-pin"><span class="draft-pin__ring"></span><span class="draft-pin__core">+</span></div>`,
+  iconSize: [44, 44],
+  iconAnchor: [22, 22],
 });
 
 function ratingColor(avg: number | null) {
-  if (avg === null) return "#64748b";
-  if (avg >= 4.5) return "#16a34a";
-  if (avg >= 3.5) return "#65a30d";
-  if (avg >= 2.5) return "#f59e0b";
-  return "#dc2626";
+  if (avg === null) return "#a3aca5";
+  if (avg >= 4.5) return "#2f9e5b";
+  if (avg >= 3.5) return "#8db33a";
+  if (avg >= 2.5) return "#f2a93b";
+  return "#e5484d";
 }
 
 function ClickHandler({ onMapClick }: { onMapClick: Props["onMapClick"] }) {
@@ -123,11 +118,14 @@ export default function BenchMap({
       zoom={12}
       className="h-full w-full"
       scrollWheelZoom
+      zoomControl={false}
     >
+      {/* Тайлы OSM приглушены фильтром (.leaflet-tile-pane в globals.css) под палитру сайта */}
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
+      <ZoomControl position="bottomright" />
       <ClickHandler onMapClick={onMapClick} />
       <FocusHandler focus={focus} />
       <AutoResize />
@@ -138,7 +136,7 @@ export default function BenchMap({
         <Marker
           key={b.id}
           position={[b.lat, b.lng]}
-          icon={benchIcon(ratingColor(b.avgRating), b.id === selectedId)}
+          icon={benchIcon(ratingColor(b.avgRating), b.avgRating, b.id === selectedId)}
           eventHandlers={{
             click: (e) => {
               L.DomEvent.stopPropagation(e);
@@ -148,8 +146,8 @@ export default function BenchMap({
         >
           <Tooltip direction="top">
             <div className="text-sm">
-              <div className="font-semibold">{b.title}</div>
-              <div className="text-slate-600">
+              <div className="font-bold">{b.title}</div>
+              <div className="text-white/60">
                 {b.avgRating !== null
                   ? `★ ${b.avgRating.toFixed(1)} · ${b.reviewCount} отз.`
                   : "Пока без оценок"}

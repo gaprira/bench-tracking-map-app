@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, useEffect, useCallback } from "react";
+import { Camera, Check, ImagePlus, RotateCcw, SwitchCamera } from "lucide-react";
 
 type PhotoCaptureProps = {
   label: string;
@@ -138,104 +139,101 @@ export default function PhotoCapture({ label, onPhoto, required = true, preview 
     setFacingMode((prev) => (prev === "environment" ? "user" : "environment"));
   };
 
-  const displayFile = capturedFile || (preview ? { name: "preview" } as File : null);
+  const tabClass = (active: boolean) =>
+    `flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold transition ${
+      active ? "bg-paper text-ink shadow-sm" : "text-ink-soft hover:text-ink"
+    }`;
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2 text-xs text-slate-600">
-        <button
-          type="button"
-          onClick={() => setMode("camera")}
-          className={`px-2 py-1 rounded ${mode === "camera" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
-        >
-          Камера
-        </button>
-        <button
-          type="button"
-          onClick={() => setMode("file")}
-          className={`px-2 py-1 rounded ${mode === "file" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
-        >
-          Файл
-        </button>
-        {required && <span className="text-red-500">*</span>}
-      </div>
-
-      {error && <p className="text-xs text-red-600">{error}</p>}
-
-      {mode === "camera" && (
-        <div className="relative">
-          <video
-            ref={videoRef}
-            autoPlay
-            playsInline
-            className="w-full max-h-64 rounded-lg bg-slate-100"
-            style={{ aspectRatio: "16/9" }}
+    <div className="space-y-2.5">
+      {(capturedFile || preview) ? (
+        <div className="group relative overflow-hidden rounded-2xl ring-1 ring-sand">
+          <img
+            src={capturedFile ? URL.createObjectURL(capturedFile) : preview!}
+            alt="Превью"
+            className="h-44 w-full object-cover"
           />
-          <canvas ref={canvasRef} className="hidden" />
-          {stream && (
-            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-2">
-              <button
-                type="button"
-                onClick={switchCamera}
-                className="rounded-full bg-white/90 px-3 py-1.5 text-xs font-medium shadow backdrop-blur"
-              >
-                🔄 Переключить
-              </button>
-              <button
-                type="button"
-                onClick={capture}
-                className="rounded-full bg-emerald-600 px-4 py-1.5 text-xs font-semibold text-white shadow"
-              >
-                📸 Сфотографировать
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
-      {mode === "file" && (
-        <div className="rounded-lg border-2 border-dashed border-slate-300 p-4 text-center">
-          <input
-            type="file"
-            accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
-            onChange={handleFileChange}
-            className="hidden"
-            id={`photo-input-${label}`}
-          />
-          <label
-            htmlFor={`photo-input-${label}`}
-            className="cursor-pointer text-sm text-slate-600 hover:text-slate-800"
-          >
-            Нажмите или перетащите фото сюда
-          </label>
-          <p className="text-xs text-slate-400 mt-1">JPEG, PNG, WebP, HEIC — фото сожмётся автоматически</p>
-        </div>
-      )}
-
-      {(capturedFile || preview) && (
-        <div className="relative rounded-lg overflow-hidden border border-slate-200">
-          {capturedFile ? (
-            <img
-              src={URL.createObjectURL(capturedFile)}
-              alt="Превью"
-              className="w-full h-auto max-h-48 object-cover"
-            />
-          ) : preview && (
-            <img
-              src={preview}
-              alt="Превью"
-              className="w-full h-auto max-h-48 object-cover"
-            />
-          )}
+          <span className="absolute left-2.5 top-2.5 inline-flex items-center gap-1 rounded-full bg-forest/85 px-2.5 py-1 text-[11px] font-bold text-white backdrop-blur">
+            <Check size={12} strokeWidth={3} /> Готово
+          </span>
           <button
             type="button"
             onClick={clearPhoto}
-            className="absolute top-1 right-1 rounded-full bg-red-600/90 p-1 text-white shadow hover:bg-red-700"
-            title="Удалить фото"
+            className="absolute right-2.5 top-2.5 inline-flex items-center gap-1 rounded-full bg-paper/90 px-3 py-1.5 text-xs font-bold text-ink shadow backdrop-blur transition hover:bg-paper active:scale-95"
+            title="Переснять"
           >
-            ✕
+            <RotateCcw size={13} /> Переснять
           </button>
         </div>
+      ) : (
+        <>
+          <div className="flex gap-1 rounded-full bg-sand/70 p-1">
+            <button type="button" onClick={() => setMode("camera")} className={tabClass(mode === "camera")}>
+              <Camera size={14} /> Камера
+            </button>
+            <button type="button" onClick={() => setMode("file")} className={tabClass(mode === "file")}>
+              <ImagePlus size={14} /> Из галереи
+            </button>
+          </div>
+
+          {error && <p className="text-xs font-medium text-tangerine-dark">{error}</p>}
+
+          {mode === "camera" && (
+            <div className="relative overflow-hidden rounded-2xl bg-ink">
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                className="max-h-64 w-full object-cover"
+                style={{ aspectRatio: "4/3" }}
+              />
+              <canvas ref={canvasRef} className="hidden" />
+              {stream && (
+                <div className="absolute inset-x-0 bottom-3 flex items-center justify-center gap-6">
+                  <span className="h-10 w-10" />
+                  <button
+                    type="button"
+                    onClick={capture}
+                    aria-label="Сфотографировать"
+                    className="flex h-16 w-16 items-center justify-center rounded-full border-4 border-white/90 bg-white/20 backdrop-blur transition active:scale-90"
+                  >
+                    <span className="h-11 w-11 rounded-full bg-white" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={switchCamera}
+                    aria-label="Переключить камеру"
+                    className="flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur transition active:scale-90"
+                  >
+                    <SwitchCamera size={18} />
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {mode === "file" && (
+            <label
+              htmlFor={`photo-input-${label}`}
+              className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-sand-dark bg-paper px-4 py-7 text-center transition hover:border-forest-light hover:bg-cream"
+            >
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+                onChange={handleFileChange}
+                className="hidden"
+                id={`photo-input-${label}`}
+              />
+              <span className="mb-2 flex h-11 w-11 items-center justify-center rounded-full bg-moss/40 text-forest">
+                <ImagePlus size={20} />
+              </span>
+              <span className="text-sm font-bold text-ink">Выбрать фото</span>
+              <span className="mt-0.5 text-xs text-ink-soft">
+                JPEG, PNG, WebP, HEIC — сожмём автоматически
+              </span>
+            </label>
+          )}
+        </>
       )}
     </div>
   );
